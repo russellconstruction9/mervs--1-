@@ -43,6 +43,12 @@ const App: React.FC = () => {
     const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
     // Admin Authentication State (separate from regular user auth)
     const [currentAdmin, setCurrentAdmin] = useState<string | null>(null);
+    // Whether admin has ever completed company setup
+    const [isAdminConfigured, setIsAdminConfigured] = useState<boolean>(
+        () => !!localStorage.getItem('truchoice_admin_creds')
+    );
+    // Whether to show admin login screen over the employee login
+    const [showAdminLogin, setShowAdminLogin] = useState(false);
 
     // Modal State
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -77,12 +83,25 @@ const App: React.FC = () => {
     const handleAdminLogin = (username: string) => {
         localStorage.setItem('truchoice_admin', username);
         setCurrentAdmin(username);
+        setIsAdminConfigured(true);
+        setShowAdminLogin(false);
+        // Create a synthetic admin user profile so the main app renders properly
+        if (!currentUser) {
+            const adminProfile: UserProfile = { id: 'admin_user', name: username, rate: '0', role: 'admin' };
+            setCurrentUser(adminProfile);
+            localStorage.setItem('truchoice_user', JSON.stringify(adminProfile));
+        }
     };
 
     const handleAdminLogout = () => {
         localStorage.removeItem('truchoice_admin');
         setCurrentAdmin(null);
-        // Stay on the admin tab so they see the login again
+        setShowAdminLogin(false);
+        // If the current user was the synthetic admin profile, log them out too
+        if (currentUser?.id === 'admin_user') {
+            localStorage.removeItem('truchoice_user');
+            setCurrentUser(null);
+        }
     };
 
     const loadData = useCallback(async (isBackground = false) => {
@@ -318,8 +337,16 @@ const App: React.FC = () => {
     });
 
     // --- RENDER LOGIN IF NOT AUTHENTICATED ---
-    if (!currentUser) {
-        return <LoginView onLogin={setCurrentUser} />;
+    if (!currentUser && !currentAdmin) {
+        if (!isAdminConfigured || showAdminLogin) {
+            return (
+                <AdminLoginView
+                    onLogin={handleAdminLogin}
+                    onBack={isAdminConfigured ? () => setShowAdminLogin(false) : undefined}
+                />
+            );
+        }
+        return <LoginView onLogin={setCurrentUser} onAdminAccess={() => setShowAdminLogin(true)} />;
     }
 
     return (

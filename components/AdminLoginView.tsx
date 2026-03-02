@@ -12,9 +12,10 @@ interface AdminCreds {
 
 interface Props {
     onLogin: (username: string) => void;
+    onBack?: () => void;
 }
 
-const AdminLoginView: React.FC<Props> = ({ onLogin }) => {
+const AdminLoginView: React.FC<Props> = ({ onLogin, onBack }) => {
     const [mode, setMode] = useState<'login' | 'setup'>('login');
     const [isFirstTime, setIsFirstTime] = useState(false);
 
@@ -168,6 +169,15 @@ const AdminLoginView: React.FC<Props> = ({ onLogin }) => {
                 )}
 
                 <div className="p-6 space-y-4">
+                    {onBack && (
+                        <button
+                            type="button"
+                            onClick={onBack}
+                            className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors mb-2"
+                        >
+                            ← Back to Employee Login
+                        </button>
+                    )}
                     {isSetupMode ? (
                         // ─── COMPANY SETUP ───
                         <>

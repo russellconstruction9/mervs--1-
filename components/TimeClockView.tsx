@@ -42,7 +42,7 @@ const ActiveTimer = React.memo(({ startTime }: { startTime: number }) => {
 const TimeClockView: React.FC<Props> = ({ timeEntries, userName, hourlyRate, availableJobs, onRefresh, onOptimisticUpdate }) => {
     const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
-    const [selectedJob, setSelectedJob] = useState('');
+    const [selectedJob, setSelectedJob] = useState('General Shop');
 
     // Report State
     const [showReportModal, setShowReportModal] = useState(false);
@@ -64,7 +64,7 @@ const TimeClockView: React.FC<Props> = ({ timeEntries, userName, hourlyRate, ava
         if (active && active.jobName) {
             setSelectedJob(active.jobName);
         } else if (!active) {
-            setSelectedJob('');
+            setSelectedJob('General Shop');
         }
     }, [timeEntries, userName]);
 
@@ -89,7 +89,7 @@ const TimeClockView: React.FC<Props> = ({ timeEntries, userName, hourlyRate, ava
                     totalPay: calculatedPay > 0 ? calculatedPay : undefined,
                     isSynced: false // Dirty
                 };
-                setSelectedJob(''); // Clear input after clocking out
+                setSelectedJob('General Shop'); // Reset to default after clocking out
             } else {
                 // Clock In
                 if (!selectedJob) {
