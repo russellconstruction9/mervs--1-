@@ -1,14 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
-import { UserProfile, JobOption, TimeEntry, Task, TaskStatus, TaskPriority } from '../types';
-import { Trash, Plus, CheckCircle, User, Briefcase, MapPin, DollarSign, X, Clock, Sparkles, LayoutList, Calendar, Lock, ShieldCheck, AlertTriangle } from './Icons';
+import { UserProfile, JobOption, TimeEntry, Task, TaskStatus, TaskPriority, ChatMessage } from '../types';
+import { Trash, Plus, CheckCircle, User, Briefcase, MapPin, DollarSign, X, Clock, Sparkles, LayoutList, Calendar, Lock, ShieldCheck, AlertTriangle, MessageCircle } from './Icons';
 import { saveUser, deleteUser, saveJob, deleteJob, saveTask, deleteTask } from '../services/sheetService';
+import ChatView from './ChatView';
 
 interface Props {
     users: UserProfile[];
     jobs: JobOption[];
     timeEntries: TimeEntry[];
     tasks: Task[];
+    messages: ChatMessage[];
+    currentUserName: string;
     onRefresh: () => void;
     onClose: () => void;
     onLogout: () => void;
@@ -27,8 +30,8 @@ const LiveTimer = ({ startTime }: { startTime: number }) => {
     return <span className="font-mono">{hours}h {minutes}m {seconds}s</span>;
 };
 
-const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTasks, onRefresh, onClose, onLogout }) => {
-    const [activeTab, setActiveTab] = useState<'live' | 'users' | 'jobs' | 'tasks'>('live');
+const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTasks, messages, currentUserName, onRefresh, onClose, onLogout }) => {
+    const [activeTab, setActiveTab] = useState<'live' | 'users' | 'jobs' | 'tasks' | 'chat'>('live');
 
     // Local state for Optimistic Updates
     const [localUsers, setLocalUsers] = useState<UserProfile[]>(users);
@@ -130,6 +133,7 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
         { id: 'users' as const, Icon: User, label: 'Team' },
         { id: 'jobs' as const, Icon: Briefcase, label: 'Jobs' },
         { id: 'tasks' as const, Icon: LayoutList, label: 'Tasks' },
+        { id: 'chat' as const, Icon: MessageCircle, label: 'Chat' },
     ];
 
     return (
@@ -458,6 +462,13 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
                                 }
                             </div>
                         </div>
+                    </div>
+                )}
+
+                {/* ═══════════ CHAT TAB ═══════════ */}
+                {activeTab === 'chat' && (
+                    <div className="-mx-4 -mt-4">
+                        <ChatView messages={messages} currentUserName={currentUserName} />
                     </div>
                 )}
 

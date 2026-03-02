@@ -10,7 +10,7 @@ import ChatView from './components/ChatView';
 import TimeClockView from './components/TimeClockView';
 import AdminView from './components/AdminView';
 import { CalendarView } from './components/CalendarView';
-import { Plus, Search, Calendar, CheckCircle, AlertTriangle, Trash, RotateCcw, Bell, LayoutList, Clock, MapPin, MessageCircle, User, Download, Briefcase, ShieldCheck } from './components/Icons';
+import { Plus, Search, Calendar, CheckCircle, AlertTriangle, Trash, RotateCcw, Bell, LayoutList, Clock, MapPin, MessageCircle, User, Download, Briefcase, ShieldCheck, LogOut } from './components/Icons';
 import { parseDescription, serializeDescription } from './utils/checklist';
 import { IOSInstallPrompt } from './components/IOSInstallPrompt';
 import { subscribeUserToPush } from './services/pushService';
@@ -91,6 +91,11 @@ const App: React.FC = () => {
             setCurrentUser(adminProfile);
             localStorage.setItem('truchoice_user', JSON.stringify(adminProfile));
         }
+    };
+
+    const handleUserLogout = () => {
+        localStorage.removeItem('truchoice_user');
+        setCurrentUser(null);
     };
 
     const handleAdminLogout = () => {
@@ -399,6 +404,17 @@ const App: React.FC = () => {
                             {currentUser.name.charAt(0)}
                         </div>
 
+                        {/* Logout — only for non-admin employees */}
+                        {currentUser.id !== 'admin_user' && (
+                            <button
+                                onClick={handleUserLogout}
+                                className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                                title="Log Out"
+                            >
+                                <LogOut size={20} />
+                            </button>
+                        )}
+
                         {currentView === 'tasks' && (
                             <button onClick={() => { setEditingTask(null); setNewItemDate(undefined); setIsTaskModalOpen(true); }} className="bg-slate-900 text-white p-2 rounded-lg shadow-md">
                                 <Plus size={20} />
@@ -569,6 +585,8 @@ const App: React.FC = () => {
                         jobs={jobs}
                         timeEntries={timeEntries}
                         tasks={tasks}
+                        messages={messages}
+                        currentUserName={currentUser.name}
                         onRefresh={() => loadData(true)}
                         onClose={() => setCurrentView('tasks')}
                         onLogout={handleAdminLogout}
