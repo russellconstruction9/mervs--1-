@@ -43,10 +43,6 @@ const App: React.FC = () => {
     const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
     // Admin Authentication State (separate from regular user auth)
     const [currentAdmin, setCurrentAdmin] = useState<string | null>(null);
-    // Whether admin has ever completed company setup
-    const [isAdminConfigured, setIsAdminConfigured] = useState<boolean>(
-        () => !!localStorage.getItem('truchoice_admin_creds')
-    );
     // Whether to show admin login screen over the employee login
     const [showAdminLogin, setShowAdminLogin] = useState(false);
 
@@ -83,7 +79,6 @@ const App: React.FC = () => {
     const handleAdminLogin = (username: string) => {
         localStorage.setItem('truchoice_admin', username);
         setCurrentAdmin(username);
-        setIsAdminConfigured(true);
         setShowAdminLogin(false);
         // Create a synthetic admin user profile so the main app renders properly
         if (!currentUser) {
@@ -96,6 +91,7 @@ const App: React.FC = () => {
     const handleUserLogout = () => {
         localStorage.removeItem('truchoice_user');
         setCurrentUser(null);
+        setShowAdminLogin(false);
     };
 
     const handleAdminLogout = () => {
@@ -343,11 +339,11 @@ const App: React.FC = () => {
 
     // --- RENDER LOGIN IF NOT AUTHENTICATED ---
     if (!currentUser && !currentAdmin) {
-        if (!isAdminConfigured || showAdminLogin) {
+        if (showAdminLogin) {
             return (
                 <AdminLoginView
                     onLogin={handleAdminLogin}
-                    onBack={isAdminConfigured ? () => setShowAdminLogin(false) : undefined}
+                    onBack={() => setShowAdminLogin(false)}
                 />
             );
         }
