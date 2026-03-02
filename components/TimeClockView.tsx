@@ -291,11 +291,11 @@ const TimeClockView: React.FC<Props> = ({ timeEntries, userName, hourlyRate, ava
                 {/* Pulsing ring around clock button when active */}
                 <div className="relative flex items-center justify-center mb-2">
                     {activeEntry && (
-                        <span className="absolute w-48 h-48 rounded-full animate-pulse-ring"
+                        <span className="absolute w-48 h-48 rounded-full animate-pulse-ring pointer-events-none"
                             style={{ background: 'radial-gradient(circle, rgba(239,68,68,0.15) 0%, transparent 70%)', border: '1px solid rgba(239,68,68,0.2)' }} />
                     )}
                     {!activeEntry && (
-                        <span className="absolute w-48 h-48 rounded-full"
+                        <span className="absolute w-48 h-48 rounded-full pointer-events-none"
                             style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 70%)' }} />
                     )}
                     <button
