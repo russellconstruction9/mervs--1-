@@ -1,26 +1,32 @@
 steps:
   # Build Docker image with Vite env vars injected as build args
   - name: 'gcr.io/cloud-builders/docker'
+    env:
+      - 'DOCKER_BUILDKIT=1'
     args:
       - 'build'
       - '--build-arg'
-      - 'VITE_SUPABASE_URL=${_SUPABASE_URL}'
+      - 'VITE_SUPABASE_URL=$_SUPABASE_URL'
       - '--build-arg'
-      - 'VITE_SUPABASE_ANON_KEY=${_SUPABASE_ANON_KEY}'
+      - 'VITE_SUPABASE_ANON_KEY=$_SUPABASE_ANON_KEY'
       - '--build-arg'
-      - 'VITE_VAPID_PUBLIC_KEY=${_VAPID_PUBLIC_KEY}'
+      - 'VITE_VAPID_PUBLIC_KEY=$_VAPID_PUBLIC_KEY'
       - '-t'
       - 'gcr.io/$PROJECT_ID/taskpoint:$COMMIT_SHA'
       - '-t'
       - 'gcr.io/$PROJECT_ID/taskpoint:latest'
       - '.'
 
-  # Push image to Container Registry
+  # Push both tags individually (--all-tags requires Docker 20.10+)
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - '--all-tags'
-      - 'gcr.io/$PROJECT_ID/taskpoint'
+      - 'gcr.io/$PROJECT_ID/taskpoint:$COMMIT_SHA'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/taskpoint:latest'
 
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'

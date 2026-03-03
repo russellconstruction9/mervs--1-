@@ -2,9 +2,10 @@
 import React, { useState } from 'react';
 import { ShieldCheck, AlertTriangle, User, Lock } from './Icons';
 import { apiAdminLogin } from '../services/sheetService';
+import { UserProfile } from '../types';
 
 interface Props {
-    onLogin: (username: string) => void;
+    onLogin: (user: UserProfile) => void;
     onBack?: () => void;
 }
 
@@ -21,7 +22,7 @@ const AdminLoginView: React.FC<Props> = ({ onLogin, onBack }) => {
 
         try {
             const user = await apiAdminLogin(email.trim(), password);
-            onLogin(user.name);
+            onLogin(user);
         } catch (err: any) {
             setError(err.message || 'Invalid credentials.');
         } finally {

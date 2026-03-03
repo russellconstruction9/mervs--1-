@@ -12,7 +12,7 @@ import ChatView from './components/ChatView';
 import TimeClockView from './components/TimeClockView';
 import AdminView from './components/AdminView';
 import { CalendarView } from './components/CalendarView';
-import { Plus, Search, Calendar, CheckCircle, AlertTriangle, Trash, RotateCcw, Bell, LayoutList, Clock, MapPin, MessageCircle, User, Download, Briefcase, ShieldCheck, LogOut } from './components/Icons';
+import { Plus, Search, Calendar, CheckCircle, AlertTriangle, Trash, RotateCcw, Bell, LayoutList, Clock, MessageCircle, Briefcase, LogOut } from './components/Icons';
 import { parseDescription, serializeDescription } from './utils/checklist';
 import { IOSInstallPrompt } from './components/IOSInstallPrompt';
 import { subscribeUserToPush } from './services/pushService';
@@ -24,7 +24,7 @@ const hasDataChanged = (prev: any[], next: any[]) => {
 };
 
 const App: React.FC = () => {
-    // Navigation State
+    // Navigation State (only used for employee view)
     const [currentView, setCurrentView] = useState<ViewType>('tasks');
 
     // Data State
@@ -41,13 +41,11 @@ const App: React.FC = () => {
     const [taskFilter, setTaskFilter] = useState<'active' | 'completed'>('active');
     const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
-    // User Authentication State
+    // Unified auth state — role is on currentUser.role ('admin' | 'user')
     const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-    // Admin Authentication State (separate from regular user auth)
-    const [currentAdmin, setCurrentAdmin] = useState<string | null>(null);
-    // Whether to show admin login screen over the employee login
+
+    // Pre-auth screen toggles
     const [showAdminLogin, setShowAdminLogin] = useState(false);
-    // Whether to show org registration screen
     const [showRegisterOrg, setShowRegisterOrg] = useState(false);
 
     // Org slug for employee creation (derived from orgId on login)
@@ -70,54 +68,38 @@ const App: React.FC = () => {
     // Desktop Install State
     const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
-    // Check for persistent Supabase session
+    // Restore session from Supabase on mount
     useEffect(() => {
-        // Restore session from Supabase on mount
         getSessionUser().then(user => {
-            if (user) {
-                setCurrentUser(user);
-                if (user.role === 'admin') setCurrentAdmin(user.name);
-            }
+            if (user) setCurrentUser(user);
         });
 
         // Listen for auth state changes (login / logout)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             if (!session) {
                 setCurrentUser(null);
-                setCurrentAdmin(null);
                 return;
             }
             const user = await getSessionUser();
-            if (user) {
-                setCurrentUser(user);
-                if (user.role === 'admin') setCurrentAdmin(user.name);
-            }
+            if (user) setCurrentUser(user);
         });
 
         return () => subscription.unsubscribe();
     }, []);
 
-    const handleAdminLogin = (username: string) => {
-        setCurrentAdmin(username);
+    // Admin login: receives full UserProfile from AdminLoginView
+    const handleAdminLogin = (user: UserProfile) => {
+        setCurrentUser(user);
         setShowAdminLogin(false);
-        // currentUser is already set by onAuthStateChange
-        setCurrentView('admin');
     };
 
-    const handleUserLogout = async () => {
+    // Single logout handler for both admin and employee
+    const handleLogout = async () => {
         await apiLogout();
-        setCurrentUser(null);
-        setCurrentAdmin(null);
-        setShowAdminLogin(false);
-        setOrgSlug(undefined);
-    };
-
-    const handleAdminLogout = async () => {
-        await apiLogout();
-        setCurrentAdmin(null);
         setCurrentUser(null);
         setShowAdminLogin(false);
         setOrgSlug(undefined);
+        setCurrentView('tasks');
     };
 
     const loadData = useCallback(async (isBackground = false, orgId?: string) => {
@@ -126,7 +108,6 @@ const App: React.FC = () => {
         const resolvedOrgId = orgId ?? currentUser?.orgId;
 
         try {
-            // Fetch core data (Tasks, TimeEntries, Users, Jobs)
             const [taskData, timeData, userData, jobData] = await Promise.all([
                 fetchTasks(resolvedOrgId),
                 fetchTimeEntries(resolvedOrgId),
@@ -141,13 +122,11 @@ const App: React.FC = () => {
                 return b.createdAt - a.createdAt;
             });
 
-            // Smart State Updates (only if changed)
             setTasks(prev => hasDataChanged(prev, sortedTasks) ? sortedTasks : prev);
             setTimeEntries(prev => hasDataChanged(prev, timeData) ? timeData : prev);
             setUsers(prev => hasDataChanged(prev, userData) ? userData : prev);
             setJobs(prev => hasDataChanged(prev, jobData) ? jobData : prev);
 
-            // Fetch Messages if in chat view (to keep it fresh)
             if (currentView === 'chat') {
                 const msgs = await fetchMessages(resolvedOrgId);
                 setMessages(prev => hasDataChanged(prev, msgs) ? msgs : prev);
@@ -173,7 +152,6 @@ const App: React.FC = () => {
                 .then(({ data }) => { if (data?.slug) setOrgSlug(data.slug); });
         }
 
-        // --- Supabase Realtime: replace polling with push-based updates ---
         // Clean up any existing channel first
         if (realtimeChannelRef.current) {
             supabase.removeChannel(realtimeChannelRef.current);
@@ -201,7 +179,6 @@ const App: React.FC = () => {
             realtimeChannelRef.current = channel;
         }
 
-        // Fallback: reload on tab focus (handles reconnection after background)
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') loadData(true, orgId);
         };
@@ -369,18 +346,7 @@ const App: React.FC = () => {
         setIsTaskModalOpen(true);
     };
 
-    // --- Filters ---
-    const filteredTasks = tasks.filter(task => {
-        const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            task.assignedTo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (task.jobName || '').toLowerCase().includes(searchTerm.toLowerCase());
-        const isCompleted = task.status === TaskStatus.COMPLETED;
-        if (taskFilter === 'active' && isCompleted) return false;
-        if (taskFilter === 'completed' && !isCompleted) return false;
-        return matchesSearch;
-    });
-
-    // --- RENDER LOGIN IF NOT AUTHENTICATED ---
+    // --- RENDER: NOT AUTHENTICATED ---
     if (!currentUser) {
         if (showRegisterOrg) {
             return (
@@ -406,6 +372,40 @@ const App: React.FC = () => {
             />
         );
     }
+
+    // --- RENDER: ADMIN — full-screen dashboard, no employee chrome ---
+    if (currentUser.role === 'admin') {
+        return (
+            <>
+                <IOSInstallPrompt />
+                <AdminView
+                    users={users}
+                    jobs={jobs}
+                    timeEntries={timeEntries}
+                    tasks={tasks}
+                    messages={messages}
+                    currentUserName={currentUser.name}
+                    orgId={currentUser.orgId}
+                    orgSlug={orgSlug}
+                    onRefresh={() => loadData(true)}
+                    onClose={() => {}}
+                    onLogout={handleLogout}
+                />
+            </>
+        );
+    }
+
+    // --- RENDER: EMPLOYEE — tasks filtered to current user ---
+    const filteredTasks = tasks.filter(task => {
+        // Employees only see their own assigned tasks
+        if (task.assignedTo !== currentUser.name) return false;
+        const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (task.jobName || '').toLowerCase().includes(searchTerm.toLowerCase());
+        const isCompleted = task.status === TaskStatus.COMPLETED;
+        if (taskFilter === 'active' && isCompleted) return false;
+        if (taskFilter === 'completed' && !isCompleted) return false;
+        return matchesSearch;
+    });
 
     return (
         <div className="min-h-screen bg-slate-100 text-slate-800 font-sans pb-24">
@@ -445,15 +445,14 @@ const App: React.FC = () => {
                                 className="p-2 text-white bg-slate-900 hover:bg-orange-600 rounded-lg shadow-md transition-colors mr-1"
                                 title="Install App"
                             >
-                                <Download size={20} />
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             </button>
                         )}
-
-                        {/* Admin Toggle removed - Admin now has its own nav tab */}
 
                         <button
                             onClick={handleEnableNotifications}
                             className={`p-2 transition-colors ${notificationsEnabled ? 'text-orange-600' : 'text-slate-400 hover:text-slate-800'}`}
+                            title="Enable Notifications"
                         >
                             <Bell size={20} fill={notificationsEnabled ? "currentColor" : "none"} />
                         </button>
@@ -463,16 +462,13 @@ const App: React.FC = () => {
                             {currentUser.name.charAt(0)}
                         </div>
 
-                        {/* Logout */}
-                        {(
-                            <button
-                                onClick={handleUserLogout}
-                                className="p-2 text-slate-400 hover:text-red-500 transition-colors"
-                                title="Log Out"
-                            >
-                                <LogOut size={20} />
-                            </button>
-                        )}
+                        <button
+                            onClick={handleLogout}
+                            className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                            title="Log Out"
+                        >
+                            <LogOut size={20} />
+                        </button>
 
                         {currentView === 'tasks' && (
                             <button onClick={() => { setEditingTask(null); setNewItemDate(undefined); setIsTaskModalOpen(true); }} className="bg-slate-900 text-white p-2 rounded-lg shadow-md">
@@ -493,7 +489,7 @@ const App: React.FC = () => {
                         <div className="mb-6 space-y-3">
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                <input type="text" placeholder="Search tasks..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                                <input type="text" placeholder="Search your tasks..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
                                     className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg focus:border-orange-500 focus:outline-none shadow-sm" />
                             </div>
                             <div className="flex gap-2">
@@ -502,8 +498,18 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* List */}
+                        {/* Task List */}
                         <div className="space-y-4">
+                            {filteredTasks.length === 0 && (
+                                <div className="bg-white rounded-xl p-10 text-center border border-slate-200 shadow-sm">
+                                    <div className="text-slate-300 mb-2">
+                                        <svg viewBox="0 0 24 24" className="mx-auto" width="36" height="36" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12l2 2 4-4"/></svg>
+                                    </div>
+                                    <p className="text-slate-400 font-medium text-sm">
+                                        {taskFilter === 'active' ? 'No active tasks assigned to you.' : 'No completed tasks yet.'}
+                                    </p>
+                                </div>
+                            )}
                             {filteredTasks.map(task => {
                                 const { items } = parseDescription(task.description);
                                 const isDone = task.status === TaskStatus.COMPLETED;
@@ -520,7 +526,6 @@ const App: React.FC = () => {
                                         style={isDone ? {} : { boxShadow: '0 2px 12px rgba(15,23,42,0.07)' }}>
                                         <div className="flex justify-between items-start mb-2">
                                             <div className="flex gap-2 items-center flex-wrap">
-                                                <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full tracking-wide">{task.assignedTo || 'Unassigned'}</span>
                                                 {task.jobName && (
                                                     <span className="text-[10px] font-bold uppercase bg-orange-50 text-orange-600 px-2.5 py-0.5 rounded-full flex items-center gap-1 tracking-wide">
                                                         <Briefcase size={10} /> {task.jobName}
@@ -580,7 +585,7 @@ const App: React.FC = () => {
                 {/* VIEW: CALENDAR */}
                 {currentView === 'calendar' && (
                     <CalendarView
-                        tasks={tasks}
+                        tasks={filteredTasks}
                         onTaskClick={(t) => { setEditingTask(t); setIsTaskModalOpen(true); }}
                         onDayClick={handleDayClick}
                     />
@@ -596,7 +601,7 @@ const App: React.FC = () => {
 
             </main>
 
-            {/* Bottom Navigation */}
+            {/* Bottom Navigation — employee only, no admin tab */}
             <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200/80 pb-safe z-40" style={{ boxShadow: '0 -4px 20px rgba(15,23,42,0.06)' }}>
                 <div className="max-w-3xl mx-auto flex justify-around">
                     {(
@@ -605,7 +610,6 @@ const App: React.FC = () => {
                             { view: 'timeclock' as const, Icon: Clock, label: 'Time' },
                             { view: 'chat' as const, Icon: MessageCircle, label: 'Chat' },
                             { view: 'calendar' as const, Icon: Calendar, label: 'Calendar' },
-                            ...(currentAdmin ? [{ view: 'admin' as const, Icon: ShieldCheck, label: 'Admin' }] : []),
                         ] as { view: ViewType; Icon: React.FC<any>; label: string }[]
                     ).map(({ view, Icon, label }) => {
                         const isActive = currentView === view;
@@ -638,36 +642,10 @@ const App: React.FC = () => {
                 availableJobs={jobs}
             />
 
-            {/* Admin View — either login or dashboard, shown as full-page overlay */}
-            {currentView === 'admin' && (
-                currentAdmin ? (
-                    <AdminView
-                        users={users}
-                        jobs={jobs}
-                        timeEntries={timeEntries}
-                        tasks={tasks}
-                        messages={messages}
-                        currentUserName={currentUser.name}
-                        orgId={currentUser?.orgId}
-                        orgSlug={orgSlug}
-                        onRefresh={() => loadData(true)}
-                        onClose={() => setCurrentView('tasks')}
-                        onLogout={handleAdminLogout}
-                    />
-                ) : (
-                    <div className="fixed inset-0 z-50">
-                        <AdminLoginView
-                            onLogin={handleAdminLogin}
-                            onBack={() => setCurrentView('tasks')}
-                        />
-                    </div>
-                )
-            )}
-
             {isDayModalOpen && (
                 <DayModal
                     date={selectedDate || ''}
-                    tasks={tasks.filter(t => t.dueDate === selectedDate && t.status !== TaskStatus.COMPLETED)}
+                    tasks={filteredTasks.filter(t => t.dueDate === selectedDate && t.status !== TaskStatus.COMPLETED)}
                     onClose={() => setIsDayModalOpen(false)}
                     onEditTask={handleEditTaskFromDay}
                     onAddTask={handleAddTaskForDate}
