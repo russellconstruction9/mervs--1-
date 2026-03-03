@@ -41,7 +41,7 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'taskpoint'
+      - 'mervs--1--git'
       - '--image'
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/taskpoint:$SHORT_SHA'
       - '--region'
