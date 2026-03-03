@@ -48,13 +48,13 @@ const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
             // 1. Create the organization record
             const org = await createOrganization(companyName, slug);
 
-            // 2. Sign up the admin user with org_id in metadata
+            // 2. Sign up the admin user — DB trigger will auto-create the profile row
             const { data, error: signupError } = await supabase.auth.signUp({
                 email: adminEmail.trim(),
                 password: adminPassword,
                 options: {
                     data: {
-                        name: adminEmail.split('@')[0],
+                        name: adminEmail.trim().split('@')[0],
                         rate: 0,
                         role: 'admin',
                         org_id: org.id,
@@ -64,14 +64,28 @@ const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
 
             if (signupError || !data.user) throw new Error(signupError?.message || 'Registration failed');
 
-            // 3. Update profile role to admin (trigger sets it from metadata, this is a safety update)
+            // 3. Safety-update the profile in case the trigger ran before org_id was set
             await supabase
                 .from('profiles')
                 .update({ role: 'admin', org_id: org.id })
                 .eq('id', data.user.id);
 
-            setSuccess(`Organization created! Your company code is: ${slug}`);
-            setTimeout(() => onRegistered(slug), 3000);
+            // 4. Sign in immediately to establish a live session.
+            //    This fires onAuthStateChange in App.tsx → getSessionUser() → setCurrentUser
+            //    → automatically navigates to AdminView without needing onRegistered().
+            const { error: loginError } = await supabase.auth.signInWithPassword({
+                email: adminEmail.trim(),
+                password: adminPassword,
+            });
+
+            if (loginError) {
+                // Session couldn't be established (e.g. email confirmation required).
+                // Fall back to showing the success message and let the user log in manually.
+                setSuccess(`Organization created! Your company code is: "${slug}". Please log in as admin.`);
+                setTimeout(() => onRegistered(slug), 4000);
+            }
+            // If sign-in succeeded, onAuthStateChange handles the navigation automatically.
+
         } catch (err: any) {
             setError(err.message || 'Registration failed. Please try again.');
         } finally {
@@ -183,7 +197,7 @@ const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
                             >
                                 {isLoading ? (
                                     <span className="flex items-center justify-center gap-2">
-                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                                         Creating Organization...
                                     </span>
                                 ) : 'Create Organization'}

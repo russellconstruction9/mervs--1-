@@ -12,7 +12,10 @@
       "Bash(ls -la \"/c/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)/services/\")",
       "Bash(cat \"/c/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)/index.html\")",
       "Bash(git fetch origin)",
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "Bash(find \"C:/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)\" -type f)",
+      "Bash(find \"C:/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)/src\" -type f)",
+      "Bash(ls \"C:/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)/\")"
     ]
   }
 }
