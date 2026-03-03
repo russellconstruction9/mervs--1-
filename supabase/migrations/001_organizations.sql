@@ -11,12 +11,10 @@ CREATE TABLE IF NOT EXISTS organizations (
 
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 
--- Org members can read their own org details
-CREATE POLICY "members_read_own_org" ON organizations
-  FOR SELECT USING (
-    id IN (SELECT org_id FROM profiles WHERE id = auth.uid())
-  );
+-- Temporarily allow all authenticated users to read orgs (tightened in 002 after org_id is added)
+CREATE POLICY "authenticated_read_orgs" ON organizations
+  FOR SELECT USING (auth.role() = 'authenticated');
 
--- Only allow inserts via service role (org creation handled in Edge Function or admin)
-CREATE POLICY "service_role_insert_org" ON organizations
-  FOR INSERT WITH CHECK (auth.role() = 'service_role');
+-- Allow authenticated users to insert their own org (restricted by app logic)
+CREATE POLICY "authenticated_insert_org" ON organizations
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated');

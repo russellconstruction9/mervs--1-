@@ -25,7 +25,16 @@ ALTER TABLE jobs
 -- RLS POLICIES (replace any existing open policies)
 -- -----------------------------------------------
 
+-- ORGANIZATIONS: tighten policy — members can only read their own org
+DROP POLICY IF EXISTS "authenticated_read_orgs" ON organizations;
+DROP POLICY IF EXISTS "members_read_own_org" ON organizations;
+CREATE POLICY "members_read_own_org" ON organizations
+  FOR SELECT USING (
+    id IN (SELECT org_id FROM profiles WHERE id = auth.uid())
+  );
+
 -- PROFILES: users see only their org
+DROP POLICY IF EXISTS "users_own_profile" ON profiles;
 DROP POLICY IF EXISTS "org_isolation" ON profiles;
 CREATE POLICY "org_isolation" ON profiles
   FOR ALL USING (
