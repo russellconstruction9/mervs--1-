@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'truchoice-tasks-v4';
+const CACHE_NAME = 'taskpoint-tasks-v1';
 
 // Add the external CDNs your app relies on
 const urlsToCache = [
@@ -51,11 +51,11 @@ self.addEventListener('fetch', (event) => {
 
   // 2. External Assets (ESM.sh, CDNs, Fonts) -> Stale-While-Revalidate
   if (
-     url.hostname === 'esm.sh' || 
-     url.hostname === 'cdn.tailwindcss.com' ||
-     url.hostname === 'fonts.googleapis.com' || 
-     url.hostname === 'fonts.gstatic.com' ||
-     url.hostname === 'cdn-icons-png.flaticon.com'
+    url.hostname === 'esm.sh' ||
+    url.hostname === 'cdn.tailwindcss.com' ||
+    url.hostname === 'fonts.googleapis.com' ||
+    url.hostname === 'fonts.gstatic.com' ||
+    url.hostname === 'cdn-icons-png.flaticon.com'
   ) {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
@@ -82,14 +82,14 @@ self.addEventListener('fetch', (event) => {
           return response;
         }
         return fetch(event.request).then((response) => {
-           if(!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
-           }
-           const responseToCache = response.clone();
-           caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
-           });
-           return response;
+          if (!response || response.status !== 200 || response.type !== 'basic') {
+            return response;
+          }
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+          return response;
         });
       })
   );
@@ -102,7 +102,7 @@ self.addEventListener('push', (event) => {
 
   try {
     const data = event.data.json();
-    const title = data.title || 'TruChoice Update';
+    const title = data.title || 'TaskPoint Update';
     const options = {
       body: data.body || 'New activity in the app.',
       icon: './icon.svg',
@@ -111,7 +111,7 @@ self.addEventListener('push', (event) => {
         url: data.url || './' // Allow deep linking
       },
       vibrate: [100, 50, 100],
-      tag: 'truchoice-notification', // Overwrite old notifications to prevent stacking spam
+      tag: 'taskpoint-notification',
       renotify: true
     };
 

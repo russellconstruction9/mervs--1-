@@ -51,18 +51,24 @@ const AdminLoginView: React.FC<Props> = ({ onLogin, onBack }) => {
 
             {/* Logo */}
             <div className="mb-8 flex flex-col items-center relative z-10">
-                <svg viewBox="0 0 260 88" className="h-14 w-auto mb-4 drop-shadow-2xl">
+                <svg viewBox="0 0 300 88" className="h-14 w-auto mb-4 drop-shadow-2xl">
+                    {/* Checkmark */}
                     <path d="M10 28 L20 38 L40 8" fill="none" stroke="#ea580c" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
-                    <text x="50" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#ea580c">Tru</text>
-                    <text x="110" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#ffffff">C</text>
-                    <text x="136" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#ffffff">h</text>
-                    <path d="M136 12 L146 2 L156 12" fill="none" stroke="#ffffff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-                    <text x="160" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#ffffff">o</text>
-                    <rect x="187" y="20" width="6" height="20" fill="#ffffff" />
-                    <rect x="187" y="10" width="6" height="6" fill="#ea580c" />
-                    <text x="198" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#ffffff">ce</text>
-                    <text x="110" y="62" fontFamily="Inter, sans-serif" fontWeight="700" fontSize="11" style={{ letterSpacing: '0.1em' }} fill="#ffffff">ROOFING</text>
-                    <text x="110" y="78" fontFamily="Inter, sans-serif" fontWeight="700" fontSize="11" style={{ letterSpacing: '0.08em' }} fill="#ea580c">PRODUCTION</text>
+                    {/* Task — orange */}
+                    <text x="50" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#ea580c">Task</text>
+                    {/* P — white */}
+                    <text x="148" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#ffffff">P</text>
+                    {/* o — white with roof chevron above */}
+                    <text x="171" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#ffffff">o</text>
+                    <path d="M171 12 L182 2 L193 12" fill="none" stroke="#ffffff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                    {/* i — white with orange dot */}
+                    <rect x="197" y="20" width="6" height="20" fill="#ffffff" />
+                    <rect x="197" y="10" width="6" height="6" fill="#ea580c" />
+                    {/* nt — white */}
+                    <text x="207" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#ffffff">nt</text>
+                    {/* Subtitle */}
+                    <text x="148" y="62" fontFamily="Inter, sans-serif" fontWeight="700" fontSize="11" style={{ letterSpacing: '0.1em' }} fill="#ffffff">FIELD TASK</text>
+                    <text x="148" y="78" fontFamily="Inter, sans-serif" fontWeight="700" fontSize="11" style={{ letterSpacing: '0.08em' }} fill="#ea580c">MANAGER</text>
                 </svg>
                 <div className="flex items-center gap-2 bg-orange-600/20 border border-orange-500/30 px-4 py-1.5 rounded-full">
                     <ShieldCheck size={14} className="text-orange-400" />
@@ -156,7 +162,7 @@ const AdminLoginView: React.FC<Props> = ({ onLogin, onBack }) => {
                 </div>
             </div>
 
-            <p className="mt-8 text-slate-600 text-xs relative z-10">© 2024 TruChoice Roofing</p>
+            <p className="mt-8 text-slate-600 text-xs relative z-10">© 2026 TaskPoint Field Manager</p>
         </div>
     );
 };

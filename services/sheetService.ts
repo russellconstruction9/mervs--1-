@@ -36,7 +36,7 @@ export const compressImage = (base64Str: string): Promise<string> => {
 
 export const apiLogin = async (name: string, pin: string): Promise<UserProfile> => {
     // Derive email from the name using the internal pattern
-    const email = `${name.trim().toLowerCase().replace(/\s+/g, '.')}@truchoice.local`;
+    const email = `${name.trim().toLowerCase().replace(/\s+/g, '.')}@taskpoint.local`;
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pin });
     if (error || !data.user) throw new Error('Invalid name or PIN. Please try again.');
@@ -58,7 +58,7 @@ export const apiLogin = async (name: string, pin: string): Promise<UserProfile> 
 };
 
 export const apiSignup = async (name: string, pin: string, rate: string): Promise<UserProfile> => {
-    const email = `${name.trim().toLowerCase().replace(/\s+/g, '.')}@truchoice.local`;
+    const email = `${name.trim().toLowerCase().replace(/\s+/g, '.')}@taskpoint.local`;
 
     const { data, error } = await supabase.auth.signUp({
         email,

@@ -1,6 +1,6 @@
 {
-  "name": "TruChoice Task Manager",
-  "short_name": "TruTasks",
+  "name": "TaskPoint Field Manager",
+  "short_name": "TaskPoint",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#f8fafc",

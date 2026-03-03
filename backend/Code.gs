@@ -1,13 +1,13 @@
 
 // ==========================================
-// TRUCHOICE ROOFING - BACKEND V7.3 (AUTH & ADMIN TASKS)
+// TASKPOINT - BACKEND V7.3 (AUTH & ADMIN TASKS)
 // Updated: 2026-03-02
 // ==========================================
 
 // --- CONFIGURATION ---
 const CONFIG = {
-  FOLDER_NAME: "TruChoice Photos",
-  REPORT_FOLDER_NAME: "TruChoice Pay Reports",
+  FOLDER_NAME: "TaskPoint Photos",
+  REPORT_FOLDER_NAME: "TaskPoint Pay Reports",
   CACHE_TTL: 600, // 10 minutes
   SHEETS: {
     tasks:         { name: "Tasks",         headers: ["id", "title", "description", "location", "assignedTo", "dueDate", "priority", "status", "createdAt", "image", "jobName"] },
@@ -357,7 +357,7 @@ function triggerNotification(tableName, data) {
     const tokens    = [...new Set(rawTokens.map(t => t.split('/').pop()))];
     if (tokens.length === 0) return;
 
-    let title = "TruChoice Update";
+    let title = "TaskPoint Update";
     let body  = "New activity";
     if (tableName === 'messages') { title = `New Message: ${data.sender}`; body = data.text || 'Sent an image'; }
     if (tableName === 'tasks')    { title = "Task Update"; body = `${data.title} (${data.status})`; }
