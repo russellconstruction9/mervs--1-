@@ -36,6 +36,7 @@ const App: React.FC = () => {
     const [jobs, setJobs] = useState<JobOption[]>([]);
 
     const [isLoading, setIsLoading] = useState(true);
+    const [isInitializing, setIsInitializing] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [taskFilter, setTaskFilter] = useState<'active' | 'completed'>('active');
     const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -64,9 +65,8 @@ const App: React.FC = () => {
     // Desktop Install State
     const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
-    // Check for persistent Supabase session
+    // Check for persistent Supabase session once on mount
     useEffect(() => {
-        // Restore session from Supabase on mount
         console.log('[App] Checking for existing session on mount...');
         getSessionUser().then(user => {
             if (user) {
@@ -77,9 +77,13 @@ const App: React.FC = () => {
             }
         }).catch(err => {
             console.error('[App] Session check failed:', err);
+        }).finally(() => {
+            setIsInitializing(false);
         });
+    }, []);
 
-        // Listen for auth state changes (login / logout)
+    // Listen for auth state changes (login / logout)
+    useEffect(() => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             console.log('[App] Auth state changed:', event, 'hasSession:', !!session);
             if (!session) {
@@ -375,6 +379,22 @@ const App: React.FC = () => {
         if (taskFilter === 'completed' && !isCompleted) return false;
         return matchesSearch;
     });
+
+    // --- SHOW LOADING SCREEN WHILE CHECKING SESSION ---
+    if (isInitializing) {
+        return (
+            <div
+                className="min-h-screen flex flex-col items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, #020617 0%, #0f172a 50%, #1c0a00 100%)' }}
+            >
+                <svg className="animate-spin h-10 w-10 text-orange-500 mb-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <p className="text-slate-400 text-sm font-medium">Loading...</p>
+            </div>
+        );
+    }
 
     // --- RENDER LOGIN IF NOT AUTHENTICATED ---
     if (!currentUser) {
