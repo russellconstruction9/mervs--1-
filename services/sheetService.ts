@@ -66,27 +66,36 @@ export const apiLogin = async (name: string, pin: string, orgSlug?: string): Pro
     };
 };
 
-export const apiSignup = async (name: string, pin: string, rate: string, orgId?: string, orgSlug?: string): Promise<UserProfile> => {
-    const domain = orgSlug ? `${orgSlug}.taskpoint.local` : 'taskpoint.local';
-    const email = `${name.trim().toLowerCase().replace(/\s+/g, '.')}@${domain}`;
+// NOTE: apiSignup (client-side signUp) is intentionally removed.
+// Creating employees must go through the create-user Edge Function so the
+// admin's session is never replaced by the newly created user's session.
+// Use apiCreateEmployee() below instead.
 
-    const { data, error } = await supabase.auth.signUp({
-        email,
-        password: pin,
-        options: {
-            data: { name: name.trim(), rate: parseFloat(rate) || 0, role: 'user', org_id: orgId ?? null }
-        }
+export const apiCreateEmployee = async (
+    name: string,
+    pin: string,
+    rate: string,
+    orgId: string,
+    orgSlug?: string,
+): Promise<UserProfile> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Not authenticated');
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/create-user`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ name, pin, rate, orgId, orgSlug }),
     });
 
-    if (error || !data.user) throw new Error(error?.message || 'Signup failed');
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create employee');
+    }
 
-    return {
-        id: data.user.id,
-        name: name.trim(),
-        rate,
-        role: 'user',
-        orgId: orgId ?? undefined,
-    };
+    return await res.json();
 };
 
 export const apiAdminLogin = async (email: string, password: string): Promise<UserProfile> => {
@@ -404,11 +413,10 @@ export const fetchUsers = async (orgId?: string): Promise<UserProfile[]> => {
 
 export const saveUser = async (user: UserProfile, isNew: boolean, orgId?: string, orgSlug?: string): Promise<UserProfile> => {
     if (isNew) {
-        const result = await apiSignup(user.name, user.pin ?? '0000', user.rate ?? '0', orgId, orgSlug);
-        if (user.role === 'admin') {
-            await supabase.from('profiles').update({ role: 'admin' }).eq('id', result.id);
-        }
-        return { ...result, role: user.role };
+        if (!orgId) throw new Error('orgId is required to create an employee');
+        // Server-side creation — admin session is never replaced
+        const result = await apiCreateEmployee(user.name, user.pin ?? '0000', user.rate ?? '0', orgId, orgSlug);
+        return { ...result, role: 'user' };
     }
 
     const { error } = await supabase
