@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { UserProfile, JobOption, TimeEntry, Task, TaskStatus, TaskPriority, ChatMessage } from '../types';
-import { Trash, Plus, CheckCircle, User, Briefcase, MapPin, DollarSign, X, Clock, Sparkles, LayoutList, Calendar, Lock, ShieldCheck, AlertTriangle, MessageCircle } from './Icons';
-import { saveUser, deleteUser, saveJob, deleteJob, saveTask, deleteTask } from '../services/sheetService';
+import { Trash, Plus, CheckCircle, User, Briefcase, MapPin, DollarSign, X, Clock, Sparkles, LayoutList, Calendar, Lock, ShieldCheck, AlertTriangle, MessageCircle, RotateCcw } from './Icons';
+import { saveUser, deleteUser, saveJob, deleteJob, saveTask, deleteTask, resetUserPassword } from '../services/sheetService';
 import ChatView from './ChatView';
 
 interface Props {
@@ -13,7 +13,6 @@ interface Props {
     messages: ChatMessage[];
     currentUserName: string;
     orgId?: string;
-    orgSlug?: string;
     onRefresh: () => void;
     onClose: () => void;
     onLogout: () => void;
@@ -32,7 +31,7 @@ const LiveTimer = ({ startTime }: { startTime: number }) => {
     return <span className="font-mono">{hours}h {minutes}m {seconds}s</span>;
 };
 
-const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTasks, messages, currentUserName, orgId, orgSlug, onRefresh, onClose, onLogout }) => {
+const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTasks, messages, currentUserName, orgId, onRefresh, onClose, onLogout }) => {
     const [activeTab, setActiveTab] = useState<'live' | 'users' | 'jobs' | 'tasks' | 'chat'>('live');
 
     // Local state for Optimistic Updates
@@ -48,6 +47,11 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
     const [newUser, setNewUser] = useState({ username: '', name: '', rate: '', password: '' });
     const [newJob, setNewJob] = useState({ name: '', address: '' });
     const [newTask, setNewTask] = useState({ title: '', assignedTo: '', dueDate: '', jobName: '' });
+
+    // Password Reset Modal
+    const [resetPasswordModal, setResetPasswordModal] = useState<{ userId: string; userName: string } | null>(null);
+    const [newPassword, setNewPassword] = useState('');
+    const [resetLoading, setResetLoading] = useState(false);
 
     const activeWorkers = timeEntries.filter(t => t.status === 'active');
     const completedToday = globalTasks.filter(t => t.status === TaskStatus.COMPLETED).length;
@@ -84,6 +88,25 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
         if (window.confirm("Delete this team member? This cannot be undone.")) {
             setLocalUsers(prev => prev.filter(u => u.id !== id));
             deleteUser(id).then(() => onRefresh());
+        }
+    };
+
+    const handleResetPassword = async () => {
+        if (!resetPasswordModal || !newPassword) return;
+        if (newPassword.length < 6) {
+            alert('Password must be at least 6 characters.');
+            return;
+        }
+        setResetLoading(true);
+        try {
+            await resetUserPassword(resetPasswordModal.userId, newPassword);
+            alert(`Password reset successfully for ${resetPasswordModal.userName}`);
+            setResetPasswordModal(null);
+            setNewPassword('');
+        } catch (err: any) {
+            alert(err.message || 'Failed to reset password');
+        } finally {
+            setResetLoading(false);
         }
     };
 

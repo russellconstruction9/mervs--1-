@@ -41,12 +41,23 @@ export const compressImage = (base64Str: string): Promise<string> => {
 
 // --- AUTH ---
 
-export const apiLogin = async (username: string, password: string): Promise<UserProfile> => {
-    // Derive email from the username using the internal pattern
-    const email = `${username.trim().toLowerCase()}@taskpoint.local`;
-
+/**
+ * Unified authenticate function - handles both admin (email) and employee (username) login
+ * Auto-detects based on whether the identifier contains '@'
+ */
+export const authenticate = async (identifier: string, password: string): Promise<UserProfile> => {
+    const trimmedId = identifier.trim().toLowerCase();
+    const isEmail = trimmedId.includes('@');
+    
+    // For employees, convert username to synthetic email
+    const email = isEmail ? trimmedId : `${trimmedId}@taskpoint.local`;
+    
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error || !data.user) throw new Error('Invalid username or password. Please try again.');
+    if (error || !data.user) {
+        throw new Error(isEmail 
+            ? 'Invalid email or password. Please try again.' 
+            : 'Invalid username or password. Please try again.');
+    }
 
     const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -66,25 +77,42 @@ export const apiLogin = async (username: string, password: string): Promise<User
     };
 };
 
+// Legacy functions - kept for backward compatibility, delegate to authenticate()
+export const apiLogin = async (username: string, password: string): Promise<UserProfile> => {
+    return authenticate(username, password);
+};
+
+export const apiAdminLogin = async (email: string, password: string): Promise<UserProfile> => {
+    const user = await authenticate(email, password);
+    if (user.role !== 'admin') {
+        await supabase.auth.signOut();
+        throw new Error('Access denied. This account is not an administrator.');
+    }
+    return user;
+};
+
 export const apiSignup = async (username: string, displayName: string, password: string, rate: string, orgId?: string): Promise<UserProfile> => {
-    // Username is globally unique, used for login
+    // Username is globally unique, used for login (converted to synthetic email)
     const email = `${username.trim().toLowerCase()}@taskpoint.local`;
 
     const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-            data: { name: displayName.trim(), username: username.trim().toLowerCase(), rate: parseFloat(rate) || 0, role: 'user', org_id: orgId ?? null }
+            data: {
+                name: displayName.trim(),
+                username: username.trim().toLowerCase(),
+                rate: parseFloat(rate) || 0,
+                role: 'user',
+                org_id: orgId ?? null
+            }
         }
     });
 
     if (error || !data.user) throw new Error(error?.message || 'Signup failed');
 
-    // Wait for session to establish before profile update
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    // Update profile with username
-    await supabase.from('profiles').update({ username: username.trim().toLowerCase() }).eq('id', data.user.id);
+    // The database trigger (handle_new_user) automatically creates the profile
+    // with username and org_id from the metadata - no manual update needed
 
     return {
         id: data.user.id,
@@ -93,29 +121,6 @@ export const apiSignup = async (username: string, displayName: string, password:
         rate,
         role: 'user',
         orgId: orgId ?? undefined,
-    };
-};
-
-export const apiAdminLogin = async (email: string, password: string): Promise<UserProfile> => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error || !data.user) throw new Error('Invalid username or password.');
-
-    const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .single();
-
-    if (profileError || !profile) throw new Error('Admin profile not found.');
-    if (profile.role !== 'admin') throw new Error('Access denied. This account is not an administrator.');
-
-    return {
-        id: profile.id,
-        name: profile.name,
-        username: profile.username ?? undefined,
-        rate: profile.rate?.toString() ?? '0',
-        role: 'admin',
-        orgId: profile.org_id ?? undefined,
     };
 };
 
@@ -151,16 +156,6 @@ export const getSessionUser = async (): Promise<UserProfile | null> => {
 };
 
 // --- ORGANIZATIONS ---
-
-export const lookupOrgBySlug = async (slug: string): Promise<{ id: string; name: string; slug: string } | null> => {
-    const { data, error } = await supabase
-        .from('organizations')
-        .select('id, name, slug')
-        .eq('slug', slug.trim().toLowerCase())
-        .single();
-    if (error || !data) return null;
-    return data;
-};
 
 export const createOrganization = async (name: string, slug: string): Promise<{ id: string }> => {
     const { data, error } = await supabase
@@ -445,6 +440,23 @@ export const deleteUser = async (id: string): Promise<void> => {
     if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to delete user');
+    }
+};
+
+export const resetUserPassword = async (userId: string, newPassword: string): Promise<void> => {
+    // Call reset-password Edge Function which uses service role key
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/reset-password`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ userId, newPassword }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to reset password');
     }
 };
 

@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
-import { apiLogin, apiAdminLogin } from '../services/sheetService';
+import { authenticate } from '../services/sheetService';
 import { UserProfile } from '../types';
-import { CheckCircle, AlertTriangle, User, Lock, Mail, ShieldCheck } from './Icons';
+import { CheckCircle, AlertTriangle, User, Lock } from './Icons';
 
 interface Props {
   onLogin: (user: UserProfile) => void;
@@ -10,10 +9,12 @@ interface Props {
 }
 
 const LoginView: React.FC<Props> = ({ onLogin, onRegisterOrg }) => {
-  const [isAdminMode, setIsAdminMode] = useState(false);
-  const [loginData, setLoginData] = useState({ username: '', password: '', email: '', adminPassword: '' });
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const isEmail = identifier.includes('@');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,28 +22,29 @@ const LoginView: React.FC<Props> = ({ onLogin, onRegisterOrg }) => {
     setError('');
 
     try {
-      if (isAdminMode) {
-        // Admin login with email + password
-        if (!loginData.email.trim() || !loginData.adminPassword) {
-          throw new Error('Email and password are required.');
-        }
-        const user = await apiAdminLogin(loginData.email.trim(), loginData.adminPassword);
-        onLogin(user);
-      } else {
-        // Employee login with username + password
-        if (!loginData.username.trim()) {
-          throw new Error('Username is required.');
-        }
-        if (!loginData.password || loginData.password.length < 6) {
-          throw new Error('Password must be at least 6 characters.');
-        }
-        const user = await apiLogin(loginData.username.trim(), loginData.password);
-        onLogin(user);
+      if (!identifier.trim()) {
+        throw new Error('Email or username is required.');
       }
+      if (!password || password.length < 6) {
+        throw new Error('Password must be at least 6 characters.');
+      }
+      const user = await authenticate(identifier.trim(), password);
+      onLogin(user);
     } catch (err: any) {
       setError(err.message || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Format identifier as user types - lowercase, strip invalid chars for usernames
+  const handleIdentifierChange = (value: string) => {
+    if (value.includes('@')) {
+      // Email mode - allow normal email characters
+      setIdentifier(value.toLowerCase());
+    } else {
+      // Username mode - restrict to alphanumeric + underscore
+      setIdentifier(value.toLowerCase().replace(/[^a-z0-9_@.]/g, ''));
     }
   };
 
@@ -92,34 +94,10 @@ const LoginView: React.FC<Props> = ({ onLogin, onRegisterOrg }) => {
         <div className="h-1.5 w-full" style={{ background: 'linear-gradient(90deg, #ea580c, #f97316)' }} />
 
         <div className="p-6 space-y-4">
-          {/* Mode Toggle */}
-          <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
-            <button
-              type="button"
-              onClick={() => setIsAdminMode(false)}
-              className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-wide transition-all flex items-center justify-center gap-1.5 ${
-                !isAdminMode ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <User size={14} /> Employee
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsAdminMode(true)}
-              className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-wide transition-all flex items-center justify-center gap-1.5 ${
-                isAdminMode ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <ShieldCheck size={14} /> Admin
-            </button>
-          </div>
-
           <div className="text-center mb-1">
-            <h2 className="text-xl font-black text-slate-900">
-              {isAdminMode ? 'Administrator Login' : 'Employee Login'}
-            </h2>
+            <h2 className="text-xl font-black text-slate-900">Welcome Back</h2>
             <p className="text-slate-500 text-xs mt-1">
-              {isAdminMode ? 'Sign in with your admin email and password' : 'Enter your username and password'}
+              Enter your email (admin) or username (employee)
             </p>
           </div>
 
@@ -130,75 +108,43 @@ const LoginView: React.FC<Props> = ({ onLogin, onRegisterOrg }) => {
           )}
 
           <form onSubmit={handleLogin} className="space-y-4">
-            {isAdminMode ? (
-              <>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Email</label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Mail size={18} /></div>
-                    <input
-                      type="email"
-                      required
-                      value={loginData.email}
-                      onChange={e => setLoginData({ ...loginData, email: e.target.value })}
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900"
-                      placeholder="admin@yourcompany.com"
-                      autoComplete="email"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Password</label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Lock size={18} /></div>
-                    <input
-                      type="password"
-                      required
-                      value={loginData.adminPassword}
-                      onChange={e => setLoginData({ ...loginData, adminPassword: e.target.value })}
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900"
-                      placeholder="••••••••"
-                      autoComplete="current-password"
-                    />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Username</label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><User size={18} /></div>
-                    <input
-                      type="text"
-                      required
-                      value={loginData.username}
-                      onChange={e => setLoginData({ ...loginData, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900 font-mono"
-                      placeholder="jsmith"
-                      autoComplete="username"
-                    />
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-1 ml-1">Your manager will provide your username</p>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Password</label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Lock size={18} /></div>
-                    <input
-                      type="password"
-                      required
-                      value={loginData.password}
-                      onChange={e => setLoginData({ ...loginData, password: e.target.value })}
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900"
-                      placeholder="••••••••"
-                      minLength={6}
-                      autoComplete="current-password"
-                    />
-                  </div>
-                </div>
-              </>
-            )}
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">
+                {isEmail ? 'Email' : 'Email or Username'}
+              </label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><User size={18} /></div>
+                <input
+                  type={isEmail ? 'email' : 'text'}
+                  required
+                  value={identifier}
+                  onChange={e => handleIdentifierChange(e.target.value)}
+                  className={`w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900 ${!isEmail ? 'font-mono' : ''}`}
+                  placeholder="admin@company.com or jsmith"
+                  autoComplete="username"
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1 ml-1">
+                {isEmail ? 'Logging in as administrator' : 'Employees use username, admins use email'}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Password</label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Lock size={18} /></div>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900"
+                  placeholder="••••••••"
+                  minLength={6}
+                  autoComplete="current-password"
+                />
+              </div>
+            </div>
 
             <button
               type="submit"
@@ -214,12 +160,12 @@ const LoginView: React.FC<Props> = ({ onLogin, onRegisterOrg }) => {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  {isAdminMode ? 'Verifying...' : 'Logging In...'}
+                  Signing In...
                 </span>
               ) : (
                 <>
-                  {isAdminMode ? <ShieldCheck size={20} /> : <CheckCircle size={20} />}
-                  {isAdminMode ? 'Access Admin Dashboard' : 'Access App'}
+                  <CheckCircle size={20} />
+                  Sign In
                 </>
               )}
             </button>

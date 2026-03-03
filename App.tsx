@@ -47,9 +47,6 @@ const App: React.FC = () => {
     // Derived: is current user an admin?
     const isAdmin = currentUser?.role === 'admin';
 
-    // Org slug for employee creation (derived from orgId on login)
-    const [orgSlug, setOrgSlug] = useState<string | undefined>(undefined);
-
     // Realtime channel ref (cleaned up on logout)
     const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -75,9 +72,14 @@ const App: React.FC = () => {
         });
 
         // Listen for auth state changes (login / logout)
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (!session) {
                 setCurrentUser(null);
+                return;
+            }
+            // On SIGNED_IN during registration, don't auto-set user (org_id not yet assigned)
+            // The registration flow will explicitly refresh the user when complete
+            if (event === 'SIGNED_IN' && showRegisterOrg) {
                 return;
             }
             const user = await getSessionUser();
@@ -85,12 +87,11 @@ const App: React.FC = () => {
         });
 
         return () => subscription.unsubscribe();
-    }, []);
+    }, [showRegisterOrg]);
 
     const handleLogout = async () => {
         await apiLogout();
         setCurrentUser(null);
-        setOrgSlug(undefined);
         setCurrentView('tasks');
     };
 
@@ -140,12 +141,6 @@ const App: React.FC = () => {
 
         const orgId = currentUser.orgId;
         loadData(false, orgId);
-
-        // Fetch org slug for use in employee creation
-        if (orgId && !orgSlug) {
-            supabase.from('organizations').select('slug').eq('id', orgId).single()
-                .then(({ data }) => { if (data?.slug) setOrgSlug(data.slug); });
-        }
 
         // --- Supabase Realtime: replace polling with push-based updates ---
         // Clean up any existing channel first
@@ -360,7 +355,12 @@ const App: React.FC = () => {
             return (
                 <RegisterOrgView
                     onBack={() => setShowRegisterOrg(false)}
-                    onRegistered={(_slug) => setShowRegisterOrg(false)}
+                    onRegistered={async (_slug) => {
+                        // Refresh user data now that org_id is set on the profile
+                        const updatedUser = await getSessionUser();
+                        if (updatedUser) setCurrentUser(updatedUser);
+                        setShowRegisterOrg(false);
+                    }}
                 />
             );
         }
@@ -613,7 +613,6 @@ const App: React.FC = () => {
                     messages={messages}
                     currentUserName={currentUser.name}
                     orgId={currentUser?.orgId}
-                    orgSlug={orgSlug}
                     onRefresh={() => loadData(true)}
                     onClose={() => setCurrentView('tasks')}
                     onLogout={handleLogout}

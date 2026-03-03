@@ -1,15 +1,39 @@
 import React, { useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { createOrganization } from '../services/sheetService';
-import { ShieldCheck, Building } from './Icons';
+import { Building } from './Icons';
 
 interface Props {
     onBack: () => void;
-    onRegistered: (orgSlug: string) => void;
+    onRegistered: (orgSlug: string) => void | Promise<void>;
 }
 
 const slugify = (str: string) =>
     str.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+// Helper to wait for session to be established with retry
+const waitForSession = async (maxAttempts = 10, delayMs = 200): Promise<boolean> => {
+    for (let i = 0; i < maxAttempts; i++) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) return true;
+        await new Promise(r => setTimeout(r, delayMs));
+    }
+    return false;
+};
+
+// Helper to verify profile has org_id set
+const waitForProfileUpdate = async (userId: string, orgId: string, maxAttempts = 10, delayMs = 200): Promise<boolean> => {
+    for (let i = 0; i < maxAttempts; i++) {
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('org_id')
+            .eq('id', userId)
+            .single();
+        if (profile?.org_id === orgId) return true;
+        await new Promise(r => setTimeout(r, delayMs));
+    }
+    return false;
+};
 
 const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
     const [companyName, setCompanyName] = useState('');
@@ -45,7 +69,7 @@ const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
 
         setIsLoading(true);
         try {
-            // 1. Sign up the admin user FIRST (without org_id - we'll add it after creating the org)
+            // Step 1: Sign up admin user
             const { data, error: signupError } = await supabase.auth.signUp({
                 email: adminEmail.trim(),
                 password: adminPassword,
@@ -58,27 +82,41 @@ const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
                 },
             });
 
-            if (signupError || !data.user) throw new Error(signupError?.message || 'Registration failed');
+            if (signupError || !data.user) {
+                throw new Error(signupError?.message || 'Registration failed');
+            }
 
-            // Wait for session to be fully established
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Step 2: Wait for session to establish (required for RLS)
+            const sessionReady = await waitForSession();
+            if (!sessionReady) {
+                throw new Error('Failed to establish session. Please try again.');
+            }
 
-            // 2. Create the organization record (now authenticated)
+            // Step 3: Create the organization
             const org = await createOrganization(companyName, slug);
 
-            // 3. Update profile with org_id and ensure role is admin
+            // Step 4: Update profile with org_id
             const { error: updateError } = await supabase
                 .from('profiles')
                 .update({ role: 'admin', org_id: org.id })
                 .eq('id', data.user.id);
 
             if (updateError) {
-                console.warn('Profile update warning:', updateError.message);
+                throw new Error(`Failed to link admin to organization: ${updateError.message}`);
             }
 
-            setSuccess(`Organization created successfully!`);
-            setTimeout(() => onRegistered(slug), 1500);
+            // Step 5: Verify profile update completed
+            const profileReady = await waitForProfileUpdate(data.user.id, org.id);
+            if (!profileReady) {
+                console.warn('Profile update verification timed out, proceeding anyway');
+            }
+
+            setSuccess('Organization created successfully!');
+            // Allow UI to show success message briefly, then complete
+            setTimeout(() => onRegistered(slug), 800);
         } catch (err: any) {
+            // Clean up on failure - sign out to avoid partial state
+            await supabase.auth.signOut();
             setError(err.message || 'Registration failed. Please try again.');
         } finally {
             setIsLoading(false);
