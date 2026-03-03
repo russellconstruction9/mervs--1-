@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { apiLogin, apiAdminLogin } from '../services/sheetService';
 import { UserProfile } from '../types';
-import { CheckCircle, AlertTriangle, User, Lock, Building, Mail, ShieldCheck } from './Icons';
+import { CheckCircle, AlertTriangle, User, Lock, Mail, ShieldCheck } from './Icons';
 
 interface Props {
   onLogin: (user: UserProfile) => void;
@@ -11,7 +11,7 @@ interface Props {
 
 const LoginView: React.FC<Props> = ({ onLogin, onRegisterOrg }) => {
   const [isAdminMode, setIsAdminMode] = useState(false);
-  const [loginData, setLoginData] = useState({ name: '', password: '', orgSlug: '', email: '', adminPassword: '' });
+  const [loginData, setLoginData] = useState({ username: '', password: '', email: '', adminPassword: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -29,14 +29,14 @@ const LoginView: React.FC<Props> = ({ onLogin, onRegisterOrg }) => {
         const user = await apiAdminLogin(loginData.email.trim(), loginData.adminPassword);
         onLogin(user);
       } else {
-        // Employee login with name + password + company code
+        // Employee login with username + password
+        if (!loginData.username.trim()) {
+          throw new Error('Username is required.');
+        }
         if (!loginData.password || loginData.password.length < 6) {
           throw new Error('Password must be at least 6 characters.');
         }
-        if (!loginData.orgSlug.trim()) {
-          throw new Error('Company code is required.');
-        }
-        const user = await apiLogin(loginData.name, loginData.password, loginData.orgSlug);
+        const user = await apiLogin(loginData.username.trim(), loginData.password);
         onLogin(user);
       }
     } catch (err: any) {
@@ -119,7 +119,7 @@ const LoginView: React.FC<Props> = ({ onLogin, onRegisterOrg }) => {
               {isAdminMode ? 'Administrator Login' : 'Employee Login'}
             </h2>
             <p className="text-slate-500 text-xs mt-1">
-              {isAdminMode ? 'Sign in with your admin email and password' : 'Enter your company code, name, and PIN'}
+              {isAdminMode ? 'Sign in with your admin email and password' : 'Enter your username and password'}
             </p>
           </div>
 
@@ -166,35 +166,20 @@ const LoginView: React.FC<Props> = ({ onLogin, onRegisterOrg }) => {
             ) : (
               <>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Company Code</label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Building size={18} /></div>
-                    <input
-                      type="text"
-                      value={loginData.orgSlug}
-                      onChange={e => setLoginData({ ...loginData, orgSlug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900 font-mono"
-                      placeholder="your-company-code"
-                      autoComplete="organization"
-                      required
-                    />
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-1 ml-1">Ask your manager for your company code</p>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Full Name</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Username</label>
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><User size={18} /></div>
                     <input
                       type="text"
                       required
-                      value={loginData.name}
-                      onChange={e => setLoginData({ ...loginData, name: e.target.value })}
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900"
-                      placeholder="Enter your name"
-                      autoComplete="name"
+                      value={loginData.username}
+                      onChange={e => setLoginData({ ...loginData, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900 font-mono"
+                      placeholder="jsmith"
+                      autoComplete="username"
                     />
                   </div>
+                  <p className="text-[10px] text-slate-400 mt-1 ml-1">Your manager will provide your username</p>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Password</label>

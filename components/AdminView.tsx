@@ -45,7 +45,7 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
     useEffect(() => { setLocalTasks(globalTasks); }, [globalTasks]);
 
     // Forms
-    const [newUser, setNewUser] = useState({ name: '', rate: '', password: '' });
+    const [newUser, setNewUser] = useState({ username: '', name: '', rate: '', password: '' });
     const [newJob, setNewJob] = useState({ name: '', address: '' });
     const [newTask, setNewTask] = useState({ title: '', assignedTo: '', dueDate: '', jobName: '' });
 
@@ -55,21 +55,29 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
 
     const handleAddUser = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newUser.name) return;
+        if (!newUser.username || !newUser.name) {
+            alert('Username and display name are required.');
+            return;
+        }
+        if (!/^[a-z0-9_]+$/.test(newUser.username)) {
+            alert('Username can only contain lowercase letters, numbers, and underscores.');
+            return;
+        }
         if (!newUser.password || newUser.password.length < 6) {
             alert('Please enter a password of at least 6 characters for this employee.');
             return;
         }
         const user: UserProfile = {
             id: crypto.randomUUID(),
+            username: newUser.username.toLowerCase(),
             name: newUser.name,
             rate: newUser.rate || '0',
             role: 'user',
             password: newUser.password
         };
         setLocalUsers(prev => [...prev, user]);
-        setNewUser({ name: '', rate: '', password: '' });
-        saveUser(user, true, orgId, orgSlug).then(() => onRefresh());
+        setNewUser({ username: '', name: '', rate: '', password: '' });
+        saveUser(user, true, orgId).then(() => onRefresh());
     };
 
     const handleDeleteUser = (id: string) => {
@@ -342,9 +350,16 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
                         <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                             <h3 className="font-bold text-sm text-slate-500 uppercase mb-4 flex items-center gap-2"><User size={14} /> Add Team Member</h3>
                             <form onSubmit={handleAddUser} className="space-y-3">
-                                <div>
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Full Name</label>
-                                    <input type="text" placeholder="e.g. John Smith" value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })} className="w-full mt-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" required />
+                                <div className="flex gap-3">
+                                    <div className="w-36">
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Username <span className="text-red-500">*</span></label>
+                                        <input type="text" placeholder="jsmith" value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })} className="w-full mt-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium font-mono focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" required />
+                                        <p className="text-[10px] text-slate-400 mt-1">For login</p>
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Display Name <span className="text-red-500">*</span></label>
+                                        <input type="text" placeholder="John Smith" value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })} className="w-full mt-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" required />
+                                    </div>
                                 </div>
                                 <div className="flex gap-3">
                                     <div className="flex-1">
@@ -354,7 +369,6 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
                                     <div className="w-40">
                                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1"><Lock size={10} /> Password <span className="text-red-500">*</span></label>
                                         <input type="password" minLength={6} placeholder="Min 6 chars" required value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} className="w-full mt-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" />
-                                        <p className="text-[10px] text-slate-400 mt-1">Employee uses this to log in</p>
                                     </div>
                                 </div>
                                 <button type="submit" className="w-full py-2.5 bg-slate-900 text-white font-bold rounded-lg hover:bg-orange-600 transition flex items-center justify-center gap-2 active:scale-[0.98] shadow-sm"><Plus size={16} /> Add Employee</button>
@@ -388,14 +402,12 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
                                                             {isActive && <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full uppercase tracking-wide">Active</span>}
                                                         </div>
                                                         <div className="flex items-center gap-3 mt-0.5">
+                                                            {user.username && (
+                                                                <span className="text-xs text-slate-500 font-mono">@{user.username}</span>
+                                                            )}
                                                             <span className="text-xs text-emerald-600 font-bold flex items-center gap-0.5">
                                                                 <DollarSign size={11} />{user.rate || '0'}/hr
                                                             </span>
-                                                            {user.password && (
-                                                                <span className="text-xs text-slate-400 flex items-center gap-0.5">
-                                                                    <Lock size={10} /> Password set
-                                                                </span>
-                                                            )}
                                                             {user.role === 'admin' && (
                                                                 <span className="text-[9px] font-bold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full uppercase">Admin</span>
                                                             )}

@@ -41,13 +41,12 @@ export const compressImage = (base64Str: string): Promise<string> => {
 
 // --- AUTH ---
 
-export const apiLogin = async (name: string, password: string, orgSlug?: string): Promise<UserProfile> => {
-    // Derive email from the name using the internal pattern
-    const domain = orgSlug ? `${orgSlug}.taskpoint.local` : 'taskpoint.local';
-    const email = `${name.trim().toLowerCase().replace(/\s+/g, '.')}@${domain}`;
+export const apiLogin = async (username: string, password: string): Promise<UserProfile> => {
+    // Derive email from the username using the internal pattern
+    const email = `${username.trim().toLowerCase()}@taskpoint.local`;
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error || !data.user) throw new Error('Invalid name or password. Please try again.');
+    if (error || !data.user) throw new Error('Invalid username or password. Please try again.');
 
     const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -60,29 +59,34 @@ export const apiLogin = async (name: string, password: string, orgSlug?: string)
     return {
         id: profile.id,
         name: profile.name,
+        username: profile.username ?? undefined,
         rate: profile.rate?.toString() ?? '0',
         role: profile.role as 'admin' | 'user',
         orgId: profile.org_id ?? undefined,
     };
 };
 
-export const apiSignup = async (name: string, password: string, rate: string, orgId?: string, orgSlug?: string): Promise<UserProfile> => {
-    const domain = orgSlug ? `${orgSlug}.taskpoint.local` : 'taskpoint.local';
-    const email = `${name.trim().toLowerCase().replace(/\s+/g, '.')}@${domain}`;
+export const apiSignup = async (username: string, displayName: string, password: string, rate: string, orgId?: string): Promise<UserProfile> => {
+    // Username is globally unique, used for login
+    const email = `${username.trim().toLowerCase()}@taskpoint.local`;
 
     const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-            data: { name: name.trim(), rate: parseFloat(rate) || 0, role: 'user', org_id: orgId ?? null }
+            data: { name: displayName.trim(), username: username.trim().toLowerCase(), rate: parseFloat(rate) || 0, role: 'user', org_id: orgId ?? null }
         }
     });
 
     if (error || !data.user) throw new Error(error?.message || 'Signup failed');
 
+    // Update profile with username
+    await supabase.from('profiles').update({ username: username.trim().toLowerCase() }).eq('id', data.user.id);
+
     return {
         id: data.user.id,
-        name: name.trim(),
+        name: displayName.trim(),
+        username: username.trim().toLowerCase(),
         rate,
         role: 'user',
         orgId: orgId ?? undefined,
@@ -105,6 +109,7 @@ export const apiAdminLogin = async (email: string, password: string): Promise<Us
     return {
         id: profile.id,
         name: profile.name,
+        username: profile.username ?? undefined,
         rate: profile.rate?.toString() ?? '0',
         role: 'admin',
         orgId: profile.org_id ?? undefined,
@@ -135,6 +140,7 @@ export const getSessionUser = async (): Promise<UserProfile | null> => {
     return {
         id: profile.id,
         name: profile.name,
+        username: profile.username ?? undefined,
         rate: profile.rate?.toString() ?? '0',
         role: profile.role as 'admin' | 'user',
         orgId: profile.org_id ?? undefined,
@@ -396,15 +402,17 @@ export const fetchUsers = async (orgId?: string): Promise<UserProfile[]> => {
     return (data || []).map(row => ({
         id: row.id,
         name: row.name,
+        username: row.username ?? undefined,
         rate: row.rate?.toString() ?? '0',
         role: row.role as 'admin' | 'user',
         orgId: row.org_id ?? undefined,
     }));
 };
 
-export const saveUser = async (user: UserProfile, isNew: boolean, orgId?: string, orgSlug?: string): Promise<UserProfile> => {
+export const saveUser = async (user: UserProfile, isNew: boolean, orgId?: string): Promise<UserProfile> => {
     if (isNew) {
-        const result = await apiSignup(user.name, user.password ?? 'changeme123', user.rate ?? '0', orgId, orgSlug);
+        if (!user.username) throw new Error('Username is required for new employees');
+        const result = await apiSignup(user.username, user.name, user.password ?? 'changeme123', user.rate ?? '0', orgId);
         if (user.role === 'admin') {
             await supabase.from('profiles').update({ role: 'admin' }).eq('id', result.id);
         }

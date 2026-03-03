@@ -57,6 +57,7 @@ export interface ChatMessage {
 export interface UserProfile {
   id: string;
   name: string;
+  username?: string;  // Unique login identifier for employees (e.g., "jsmith")
   rate: string;
   role: 'admin' | 'user';
   password?: string;  // Only used during employee creation, never stored

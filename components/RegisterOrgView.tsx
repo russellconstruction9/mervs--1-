@@ -69,8 +69,8 @@ const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
                 .update({ role: 'admin', org_id: org.id })
                 .eq('id', data.user.id);
 
-            setSuccess(`Organization created! Your company code is: ${slug}`);
-            setTimeout(() => onRegistered(slug), 3000);
+            setSuccess(`Organization created successfully!`);
+            setTimeout(() => onRegistered(slug), 1500);
         } catch (err: any) {
             setError(err.message || 'Registration failed. Please try again.');
         } finally {
@@ -114,7 +114,7 @@ const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
                     {success && (
                         <div className="mb-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 text-emerald-400 text-sm relative z-10">
                             <p className="font-bold">{success}</p>
-                            <p className="mt-1 text-xs opacity-80">Share this code with your employees so they can log in. Redirecting...</p>
+                            <p className="mt-1 text-xs opacity-80">Redirecting to your dashboard...</p>
                         </div>
                     )}
 
@@ -131,9 +131,6 @@ const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
                                     required
                                     autoComplete="organization"
                                 />
-                                {slug.length >= 2 && (
-                                    <p className="mt-1 text-xs text-slate-500">Company code: <span className="text-orange-400 font-mono font-bold">{slug}</span></p>
-                                )}
                             </div>
 
                             <div>
