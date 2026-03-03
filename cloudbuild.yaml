@@ -1,4 +1,17 @@
 steps:
+  # Create Artifact Registry repo if it doesn't exist
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        gcloud artifacts repositories describe cloud-run-source-deploy \
+          --location=${_REGION} --format="value(name)" 2>/dev/null || \
+        gcloud artifacts repositories create cloud-run-source-deploy \
+          --repository-format=docker \
+          --location=${_REGION} \
+          --description="Cloud Run deployments"
+
   # Build Docker image with Vite env vars injected as build args
   - name: 'gcr.io/cloud-builders/docker'
     args:
@@ -10,17 +23,17 @@ steps:
       - '--build-arg'
       - 'VITE_VAPID_PUBLIC_KEY=${_VAPID_PUBLIC_KEY}'
       - '-t'
-      - 'gcr.io/$PROJECT_ID/taskpoint:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/taskpoint:$SHORT_SHA'
       - '-t'
-      - 'gcr.io/$PROJECT_ID/taskpoint:latest'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/taskpoint:latest'
       - '.'
 
-  # Push image to Container Registry
+  # Push image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
       - '--all-tags'
-      - 'gcr.io/$PROJECT_ID/taskpoint'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/taskpoint'
 
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -30,9 +43,9 @@ steps:
       - 'deploy'
       - 'taskpoint'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/taskpoint:$COMMIT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/taskpoint:$SHORT_SHA'
       - '--region'
-      - 'us-central1'
+      - '${_REGION}'
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
@@ -51,10 +64,11 @@ substitutions:
   _SUPABASE_URL: ''       # Set in Cloud Build trigger settings
   _SUPABASE_ANON_KEY: ''  # Set in Cloud Build trigger settings
   _VAPID_PUBLIC_KEY: ''   # Set in Cloud Build trigger settings
+  _REGION: 'us-east5'
 
 images:
-  - 'gcr.io/$PROJECT_ID/taskpoint:$COMMIT_SHA'
-  - 'gcr.io/$PROJECT_ID/taskpoint:latest'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/taskpoint:$SHORT_SHA'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/taskpoint:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY
