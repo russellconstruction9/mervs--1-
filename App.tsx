@@ -67,12 +67,21 @@ const App: React.FC = () => {
     // Check for persistent Supabase session
     useEffect(() => {
         // Restore session from Supabase on mount
+        console.log('[App] Checking for existing session on mount...');
         getSessionUser().then(user => {
-            if (user) setCurrentUser(user);
+            if (user) {
+                console.log('[App] Restored session for user:', user.id);
+                setCurrentUser(user);
+            } else {
+                console.log('[App] No existing session found');
+            }
+        }).catch(err => {
+            console.error('[App] Session check failed:', err);
         });
 
         // Listen for auth state changes (login / logout)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log('[App] Auth state changed:', event, 'hasSession:', !!session);
             if (!session) {
                 setCurrentUser(null);
                 return;
@@ -80,10 +89,14 @@ const App: React.FC = () => {
             // On SIGNED_IN during registration, don't auto-set user (org_id not yet assigned)
             // The registration flow will explicitly refresh the user when complete
             if (event === 'SIGNED_IN' && showRegisterOrg) {
+                console.log('[App] Skipping auto-login during registration flow');
                 return;
             }
             const user = await getSessionUser();
-            if (user) setCurrentUser(user);
+            if (user) {
+                console.log('[App] Auth state: setting user from session:', user.id);
+                setCurrentUser(user);
+            }
         });
 
         return () => subscription.unsubscribe();
@@ -99,15 +112,28 @@ const App: React.FC = () => {
         if (!isBackground) setIsLoading(true);
 
         const resolvedOrgId = orgId ?? currentUser?.orgId;
+        console.log('[LoadData] Starting data fetch, orgId:', resolvedOrgId, 'isBackground:', isBackground);
 
         try {
-            // Fetch core data (Tasks, TimeEntries, Users, Jobs)
+            // Fetch core data (Tasks, TimeEntries, Users, Jobs) with timeout protection
+            const timeoutMs = 15000; // 15 second timeout
+            const fetchWithTimeout = <T,>(promise: Promise<T>, name: string): Promise<T> => {
+                return Promise.race([
+                    promise,
+                    new Promise<T>((_, reject) => 
+                        setTimeout(() => reject(new Error(`${name} fetch timed out after ${timeoutMs}ms`)), timeoutMs)
+                    )
+                ]);
+            };
+
+            console.log('[LoadData] Fetching tasks, time entries, users, jobs...');
             const [taskData, timeData, userData, jobData] = await Promise.all([
-                fetchTasks(resolvedOrgId),
-                fetchTimeEntries(resolvedOrgId),
-                fetchUsers(resolvedOrgId),
-                fetchJobs(resolvedOrgId)
+                fetchWithTimeout(fetchTasks(resolvedOrgId), 'Tasks'),
+                fetchWithTimeout(fetchTimeEntries(resolvedOrgId), 'TimeEntries'),
+                fetchWithTimeout(fetchUsers(resolvedOrgId), 'Users'),
+                fetchWithTimeout(fetchJobs(resolvedOrgId), 'Jobs')
             ]);
+            console.log('[LoadData] Data fetched:', { tasks: taskData.length, time: timeData.length, users: userData.length, jobs: jobData.length });
 
             // Sort Tasks: Pending/In Progress first
             const sortedTasks = taskData.sort((a, b) => {
@@ -129,8 +155,9 @@ const App: React.FC = () => {
             }
 
             checkDueTasks(sortedTasks);
+            console.log('[LoadData] Data load complete');
         } catch (e) {
-            console.error("Failed to load data", e);
+            console.error("[LoadData] Failed to load data:", e);
         } finally {
             if (!isBackground) setIsLoading(false);
         }

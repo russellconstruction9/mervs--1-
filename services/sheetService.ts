@@ -52,12 +52,17 @@ export const authenticate = async (identifier: string, password: string): Promis
     // For employees, convert username to synthetic email
     const email = isEmail ? trimmedId : `${trimmedId}@taskpoint.local`;
     
+    console.log('[Auth] Attempting login for:', email);
+    
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error || !data.user) {
+        console.error('[Auth] Login failed:', error?.message);
         throw new Error(isEmail 
             ? 'Invalid email or password. Please try again.' 
             : 'Invalid username or password. Please try again.');
     }
+    
+    console.log('[Auth] Login successful, fetching profile for:', data.user.id);
 
     const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -65,7 +70,12 @@ export const authenticate = async (identifier: string, password: string): Promis
         .eq('id', data.user.id)
         .single();
 
-    if (profileError || !profile) throw new Error('User profile not found.');
+    if (profileError || !profile) {
+        console.error('[Auth] Profile fetch failed:', profileError?.message);
+        throw new Error('User profile not found.');
+    }
+    
+    console.log('[Auth] Profile loaded:', { id: profile.id, role: profile.role, hasOrgId: !!profile.org_id });
 
     return {
         id: profile.id,
@@ -134,25 +144,48 @@ export const apiLogout = async () => {
 };
 
 export const getSessionUser = async (): Promise<UserProfile | null> => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return null;
+    console.log('[Session] Checking for existing session...');
+    try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+            console.error('[Session] Error getting session:', sessionError.message);
+            return null;
+        }
+        if (!session?.user) {
+            console.log('[Session] No active session');
+            return null;
+        }
+        
+        console.log('[Session] Found session, fetching profile for:', session.user.id);
 
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
+        const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
 
-    if (!profile) return null;
+        if (profileError) {
+            console.error('[Session] Profile fetch error:', profileError.message);
+            return null;
+        }
+        if (!profile) {
+            console.log('[Session] No profile found');
+            return null;
+        }
 
-    return {
-        id: profile.id,
-        name: profile.name,
-        username: profile.username ?? undefined,
-        rate: profile.rate?.toString() ?? '0',
-        role: profile.role as 'admin' | 'user',
-        orgId: profile.org_id ?? undefined,
-    };
+        console.log('[Session] Profile loaded:', { id: profile.id, role: profile.role, hasOrgId: !!profile.org_id });
+        return {
+            id: profile.id,
+            name: profile.name,
+            username: profile.username ?? undefined,
+            rate: profile.rate?.toString() ?? '0',
+            role: profile.role as 'admin' | 'user',
+            orgId: profile.org_id ?? undefined,
+        };
+    } catch (e) {
+        console.error('[Session] Unexpected error:', e);
+        return null;
+    }
 };
 
 // --- ORGANIZATIONS ---

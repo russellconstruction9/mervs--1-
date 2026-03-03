@@ -12,12 +12,23 @@ const slugify = (str: string) =>
     str.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 // Helper to wait for session to be established with retry
-const waitForSession = async (maxAttempts = 10, delayMs = 200): Promise<boolean> => {
+const waitForSession = async (maxAttempts = 15, delayMs = 300): Promise<boolean> => {
     for (let i = 0; i < maxAttempts; i++) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) return true;
+        try {
+            const { data: { session }, error } = await supabase.auth.getSession();
+            if (error) {
+                console.warn(`[waitForSession] attempt ${i + 1}: error:`, error.message);
+            }
+            if (session?.user) {
+                console.log(`[waitForSession] Session established after ${i + 1} attempts`);
+                return true;
+            }
+        } catch (e) {
+            console.warn(`[waitForSession] attempt ${i + 1}: exception:`, e);
+        }
         await new Promise(r => setTimeout(r, delayMs));
     }
+    console.error('[waitForSession] Failed to establish session after all attempts');
     return false;
 };
 
@@ -69,6 +80,7 @@ const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
 
         setIsLoading(true);
         try {
+            console.log('[RegisterOrg] Step 1: Signing up admin user...');
             // Step 1: Sign up admin user
             const { data, error: signupError } = await supabase.auth.signUp({
                 email: adminEmail.trim(),
@@ -83,37 +95,49 @@ const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
             });
 
             if (signupError || !data.user) {
+                console.error('[RegisterOrg] Signup error:', signupError);
                 throw new Error(signupError?.message || 'Registration failed');
             }
+            console.log('[RegisterOrg] Signup successful, user:', data.user.id);
 
             // Step 2: Wait for session to establish (required for RLS)
+            console.log('[RegisterOrg] Step 2: Waiting for session...');
             const sessionReady = await waitForSession();
             if (!sessionReady) {
                 throw new Error('Failed to establish session. Please try again.');
             }
 
             // Step 3: Create the organization
+            console.log('[RegisterOrg] Step 3: Creating organization...');
             const org = await createOrganization(companyName, slug);
+            console.log('[RegisterOrg] Organization created:', org.id);
 
             // Step 4: Update profile with org_id
+            console.log('[RegisterOrg] Step 4: Updating profile with org_id...');
             const { error: updateError } = await supabase
                 .from('profiles')
                 .update({ role: 'admin', org_id: org.id })
                 .eq('id', data.user.id);
 
             if (updateError) {
+                console.error('[RegisterOrg] Profile update error:', updateError);
                 throw new Error(`Failed to link admin to organization: ${updateError.message}`);
             }
 
             // Step 5: Verify profile update completed
+            console.log('[RegisterOrg] Step 5: Verifying profile update...');
             const profileReady = await waitForProfileUpdate(data.user.id, org.id);
             if (!profileReady) {
-                console.warn('Profile update verification timed out, proceeding anyway');
+                console.warn('[RegisterOrg] Profile update verification timed out, proceeding anyway');
             }
 
+            console.log('[RegisterOrg] Registration complete!');
             setSuccess('Organization created successfully!');
             // Allow UI to show success message briefly, then complete
-            setTimeout(() => onRegistered(slug), 800);
+            setTimeout(() => {
+                console.log('[RegisterOrg] Calling onRegistered callback...');
+                onRegistered(slug);
+            }, 800);
         } catch (err: any) {
             // Clean up on failure - sign out to avoid partial state
             await supabase.auth.signOut();
