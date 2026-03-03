@@ -1,5 +1,6 @@
 
-const CACHE_NAME = 'taskpoint-tasks-v1';
+// __APP_VERSION__ is injected by Vite at build time for cache busting
+const CACHE_NAME = `taskpoint-v${typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1'}`;
 
 // Add the external CDNs your app relies on
 const urlsToCache = [
@@ -43,8 +44,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // 1. API Calls (Apps Script) -> Network Only (don't cache data aggressively)
-  if (url.href.includes('script.google.com')) {
+  // 1. API Calls (Supabase REST, Auth, Realtime, Edge Functions) -> Network Only
+  if (url.hostname.includes('supabase.co') || url.hostname.includes('supabase.io')) {
     event.respondWith(fetch(event.request));
     return;
   }

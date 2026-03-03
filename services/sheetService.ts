@@ -2,13 +2,17 @@
 import { supabase } from './supabaseClient';
 import { Task, TaskPriority, TaskStatus, TimeEntry, ChatMessage, UserProfile, JobOption } from '../types';
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+
 // --- IMAGE UTILS ---
 
 export const compressImage = (base64Str: string): Promise<string> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Image compression timed out')), 10000);
         const img = new Image();
         img.src = base64Str;
         img.onload = () => {
+            clearTimeout(timeout);
             const canvas = document.createElement('canvas');
             let width = img.width;
             let height = img.height;
@@ -28,15 +32,19 @@ export const compressImage = (base64Str: string): Promise<string> => {
                 resolve(base64Str);
             }
         };
-        img.onerror = () => resolve(base64Str);
+        img.onerror = () => {
+            clearTimeout(timeout);
+            reject(new Error('Failed to load image for compression'));
+        };
     });
 };
 
 // --- AUTH ---
 
-export const apiLogin = async (name: string, pin: string): Promise<UserProfile> => {
+export const apiLogin = async (name: string, pin: string, orgSlug?: string): Promise<UserProfile> => {
     // Derive email from the name using the internal pattern
-    const email = `${name.trim().toLowerCase().replace(/\s+/g, '.')}@taskpoint.local`;
+    const domain = orgSlug ? `${orgSlug}.taskpoint.local` : 'taskpoint.local';
+    const email = `${name.trim().toLowerCase().replace(/\s+/g, '.')}@${domain}`;
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pin });
     if (error || !data.user) throw new Error('Invalid name or PIN. Please try again.');
@@ -54,17 +62,19 @@ export const apiLogin = async (name: string, pin: string): Promise<UserProfile> 
         name: profile.name,
         rate: profile.rate?.toString() ?? '0',
         role: profile.role as 'admin' | 'user',
+        orgId: profile.org_id ?? undefined,
     };
 };
 
-export const apiSignup = async (name: string, pin: string, rate: string): Promise<UserProfile> => {
-    const email = `${name.trim().toLowerCase().replace(/\s+/g, '.')}@taskpoint.local`;
+export const apiSignup = async (name: string, pin: string, rate: string, orgId?: string, orgSlug?: string): Promise<UserProfile> => {
+    const domain = orgSlug ? `${orgSlug}.taskpoint.local` : 'taskpoint.local';
+    const email = `${name.trim().toLowerCase().replace(/\s+/g, '.')}@${domain}`;
 
     const { data, error } = await supabase.auth.signUp({
         email,
         password: pin,
         options: {
-            data: { name: name.trim(), rate: parseFloat(rate) || 0, role: 'user' }
+            data: { name: name.trim(), rate: parseFloat(rate) || 0, role: 'user', org_id: orgId ?? null }
         }
     });
 
@@ -75,6 +85,7 @@ export const apiSignup = async (name: string, pin: string, rate: string): Promis
         name: name.trim(),
         rate,
         role: 'user',
+        orgId: orgId ?? undefined,
     };
 };
 
@@ -96,11 +107,17 @@ export const apiAdminLogin = async (email: string, password: string): Promise<Us
         name: profile.name,
         rate: profile.rate?.toString() ?? '0',
         role: 'admin',
+        orgId: profile.org_id ?? undefined,
     };
 };
 
 export const apiLogout = async () => {
     await supabase.auth.signOut();
+    // Clear all local caches on logout
+    localStorage.removeItem('taskpoint_tasks');
+    localStorage.removeItem('taskpoint_timeentries');
+    localStorage.removeItem('taskpoint_jobs');
+    localStorage.removeItem('last_notified_count');
 };
 
 export const getSessionUser = async (): Promise<UserProfile | null> => {
@@ -120,20 +137,47 @@ export const getSessionUser = async (): Promise<UserProfile | null> => {
         name: profile.name,
         rate: profile.rate?.toString() ?? '0',
         role: profile.role as 'admin' | 'user',
+        orgId: profile.org_id ?? undefined,
     };
+};
+
+// --- ORGANIZATIONS ---
+
+export const lookupOrgBySlug = async (slug: string): Promise<{ id: string; name: string; slug: string } | null> => {
+    const { data, error } = await supabase
+        .from('organizations')
+        .select('id, name, slug')
+        .eq('slug', slug.trim().toLowerCase())
+        .single();
+    if (error || !data) return null;
+    return data;
+};
+
+export const createOrganization = async (name: string, slug: string): Promise<{ id: string }> => {
+    const { data, error } = await supabase
+        .from('organizations')
+        .insert({ name: name.trim(), slug: slug.trim().toLowerCase() })
+        .select('id')
+        .single();
+    if (error || !data) throw new Error(error?.message || 'Failed to create organization');
+    return data;
 };
 
 // --- TASKS ---
 
-export const fetchTasks = async (): Promise<Task[]> => {
-    const { data, error } = await supabase
+export const fetchTasks = async (orgId?: string): Promise<Task[]> => {
+    let query = supabase
         .from('tasks')
         .select('*')
         .order('created_at', { ascending: false });
 
+    if (orgId) query = query.eq('org_id', orgId);
+
+    const { data, error } = await query;
+
     if (error) {
         console.warn('fetchTasks error:', error.message);
-        const local = localStorage.getItem('sitecommand_tasks');
+        const local = localStorage.getItem('taskpoint_tasks');
         return local ? JSON.parse(local) : [];
     }
 
@@ -151,11 +195,11 @@ export const fetchTasks = async (): Promise<Task[]> => {
         jobName: row.job_name ?? undefined,
     }));
 
-    localStorage.setItem('sitecommand_tasks', JSON.stringify(tasks));
+    localStorage.setItem('taskpoint_tasks', JSON.stringify(tasks));
     return tasks;
 };
 
-export const saveTask = async (task: Task, isNew: boolean): Promise<Task> => {
+export const saveTask = async (task: Task, isNew: boolean, orgId?: string): Promise<Task> => {
     const row = {
         id: task.id,
         title: task.title,
@@ -168,6 +212,7 @@ export const saveTask = async (task: Task, isNew: boolean): Promise<Task> => {
         created_at: task.createdAt,
         image: task.image ?? null,
         job_name: task.jobName ?? null,
+        ...(orgId ? { org_id: orgId } : {}),
     };
 
     const { error } = await supabase.from('tasks').upsert(row);
@@ -182,32 +227,49 @@ export const deleteTask = async (taskId: string): Promise<void> => {
 
 // --- TIME CLOCK (OFFLINE-FIRST) ---
 
-const TIME_LOCAL_KEY = 'sitecommand_timeentries';
+const TIME_LOCAL_KEY = 'taskpoint_timeentries';
+const MAX_ACTIVE_HOURS = 24; // auto-complete entries older than this
 
-export const fetchTimeEntries = async (): Promise<TimeEntry[]> => {
+export const fetchTimeEntries = async (orgId?: string): Promise<TimeEntry[]> => {
     const localRaw = localStorage.getItem(TIME_LOCAL_KEY);
     const localData: TimeEntry[] = localRaw ? JSON.parse(localRaw) : [];
     const unsyncedItems = localData.filter(e => e.isSynced === false);
 
     try {
-        const { data, error } = await supabase
+        let query = supabase
             .from('time_entries')
             .select('*')
             .order('start_time', { ascending: false });
 
+        if (orgId) query = query.eq('org_id', orgId);
+
+        const { data, error } = await query;
+
         if (error) throw error;
 
-        const serverData: TimeEntry[] = (data || []).map(row => ({
-            id: row.id,
-            userId: row.user_name ?? row.user_id ?? '',
-            startTime: row.start_time,
-            endTime: row.end_time ?? null,
-            status: row.status as 'active' | 'completed',
-            jobName: row.job_name ?? undefined,
-            notes: row.notes ?? undefined,
-            totalPay: row.total_pay ?? undefined,
-            isSynced: true,
-        }));
+        const now = Date.now();
+        const serverData: TimeEntry[] = (data || []).map(row => {
+            const entry: TimeEntry = {
+                id: row.id,
+                userId: row.user_name ?? row.user_id ?? '',
+                startTime: row.start_time,
+                endTime: row.end_time ?? null,
+                status: row.status as 'active' | 'completed',
+                jobName: row.job_name ?? undefined,
+                notes: row.notes ?? undefined,
+                totalPay: row.total_pay ?? undefined,
+                isSynced: true,
+            };
+            // Auto-complete orphaned active entries older than MAX_ACTIVE_HOURS
+            if (entry.status === 'active' && entry.endTime === null) {
+                const ageHours = (now - entry.startTime) / (1000 * 60 * 60);
+                if (ageHours > MAX_ACTIVE_HOURS) {
+                    entry.status = 'completed';
+                    entry.endTime = entry.startTime + MAX_ACTIVE_HOURS * 60 * 60 * 1000;
+                }
+            }
+            return entry;
+        });
 
         const serverMap = new Map<string, TimeEntry>(serverData.map(e => [e.id, e]));
         unsyncedItems.forEach(u => serverMap.set(u.id, u));
@@ -231,7 +293,7 @@ export const saveTimeEntryLocal = async (entry: TimeEntry): Promise<TimeEntry> =
     return dirty;
 };
 
-export const syncPendingTimeEntries = async (): Promise<number> => {
+export const syncPendingTimeEntries = async (orgId?: string): Promise<number> => {
     const current: TimeEntry[] = JSON.parse(localStorage.getItem(TIME_LOCAL_KEY) || '[]');
     const pending = current.filter(e => e.isSynced === false);
     if (pending.length === 0) return 0;
@@ -250,6 +312,7 @@ export const syncPendingTimeEntries = async (): Promise<number> => {
         notes: e.notes ?? null,
         total_pay: e.totalPay ?? null,
         is_synced: true,
+        ...(orgId ? { org_id: orgId } : {}),
     }));
 
     const { error } = await supabase.from('time_entries').upsert(rows);
@@ -261,20 +324,24 @@ export const syncPendingTimeEntries = async (): Promise<number> => {
     return pending.length;
 };
 
-export const saveTimeEntry = async (entry: TimeEntry, _isNew: boolean): Promise<TimeEntry> => {
+export const saveTimeEntry = async (entry: TimeEntry, _isNew: boolean, orgId?: string): Promise<TimeEntry> => {
     const saved = await saveTimeEntryLocal(entry);
-    syncPendingTimeEntries().catch(console.error);
+    syncPendingTimeEntries(orgId).catch(console.error);
     return saved;
 };
 
 // --- CHAT ---
 
-export const fetchMessages = async (): Promise<ChatMessage[]> => {
-    const { data, error } = await supabase
+export const fetchMessages = async (orgId?: string): Promise<ChatMessage[]> => {
+    let query = supabase
         .from('messages')
         .select('*')
         .order('timestamp', { ascending: true })
         .limit(100);
+
+    if (orgId) query = query.eq('org_id', orgId);
+
+    const { data, error } = await query;
 
     if (error) {
         console.warn('fetchMessages error:', error.message);
@@ -291,7 +358,7 @@ export const fetchMessages = async (): Promise<ChatMessage[]> => {
     }));
 };
 
-export const sendMessage = async (message: ChatMessage): Promise<ChatMessage> => {
+export const sendMessage = async (message: ChatMessage, orgId?: string): Promise<ChatMessage> => {
     if (message.image) {
         try { message.image = await compressImage(message.image); } catch { /* keep raw */ }
     }
@@ -302,6 +369,7 @@ export const sendMessage = async (message: ChatMessage): Promise<ChatMessage> =>
         text: message.text,
         timestamp: message.timestamp,
         image: message.image ?? null,
+        ...(orgId ? { org_id: orgId } : {}),
     });
 
     if (error) throw new Error(error.message);
@@ -310,11 +378,15 @@ export const sendMessage = async (message: ChatMessage): Promise<ChatMessage> =>
 
 // --- ADMIN: USERS ---
 
-export const fetchUsers = async (): Promise<UserProfile[]> => {
-    const { data, error } = await supabase
+export const fetchUsers = async (orgId?: string): Promise<UserProfile[]> => {
+    let query = supabase
         .from('profiles')
         .select('*')
         .order('name');
+
+    if (orgId) query = query.eq('org_id', orgId);
+
+    const { data, error } = await query;
 
     if (error) {
         console.warn('fetchUsers error:', error.message);
@@ -326,14 +398,13 @@ export const fetchUsers = async (): Promise<UserProfile[]> => {
         name: row.name,
         rate: row.rate?.toString() ?? '0',
         role: row.role as 'admin' | 'user',
+        orgId: row.org_id ?? undefined,
     }));
 };
 
-export const saveUser = async (user: UserProfile, isNew: boolean): Promise<UserProfile> => {
+export const saveUser = async (user: UserProfile, isNew: boolean, orgId?: string, orgSlug?: string): Promise<UserProfile> => {
     if (isNew) {
-        // Create via Supabase Auth so the trigger auto-creates the profile
-        const result = await apiSignup(user.name, user.pin ?? '0000', user.rate ?? '0');
-        // Then update role if admin
+        const result = await apiSignup(user.name, user.pin ?? '0000', user.rate ?? '0', orgId, orgSlug);
         if (user.role === 'admin') {
             await supabase.from('profiles').update({ role: 'admin' }).eq('id', result.id);
         }
@@ -350,22 +421,37 @@ export const saveUser = async (user: UserProfile, isNew: boolean): Promise<UserP
 };
 
 export const deleteUser = async (id: string): Promise<void> => {
-    // Deleting from profiles cascades via RLS; auth.users deletion requires admin API
-    const { error } = await supabase.from('profiles').delete().eq('id', id);
-    if (error) throw new Error(error.message);
+    // Call delete-user Edge Function which uses service role key to remove from auth.users
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ userId: id }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to delete user');
+    }
 };
 
 // --- ADMIN: JOBS ---
 
-export const fetchJobs = async (): Promise<JobOption[]> => {
-    const { data, error } = await supabase
+export const fetchJobs = async (orgId?: string): Promise<JobOption[]> => {
+    let query = supabase
         .from('jobs')
         .select('*')
         .order('name');
 
+    if (orgId) query = query.eq('org_id', orgId);
+
+    const { data, error } = await query;
+
     if (error) {
         console.warn('fetchJobs error:', error.message);
-        const local = localStorage.getItem('sitecommand_jobs');
+        const local = localStorage.getItem('taskpoint_jobs');
         return local ? JSON.parse(local) : [];
     }
 
@@ -376,16 +462,17 @@ export const fetchJobs = async (): Promise<JobOption[]> => {
         active: row.active ?? true,
     }));
 
-    localStorage.setItem('sitecommand_jobs', JSON.stringify(jobs));
+    localStorage.setItem('taskpoint_jobs', JSON.stringify(jobs));
     return jobs;
 };
 
-export const saveJob = async (job: JobOption, _isNew: boolean): Promise<JobOption> => {
+export const saveJob = async (job: JobOption, _isNew: boolean, orgId?: string): Promise<JobOption> => {
     const { error } = await supabase.from('jobs').upsert({
         id: job.id,
         name: job.name,
         address: job.address ?? '',
         active: job.active,
+        ...(orgId ? { org_id: orgId } : {}),
     });
     if (error) throw new Error(error.message);
     return job;
@@ -396,8 +483,19 @@ export const deleteJob = async (id: string): Promise<void> => {
     if (error) throw new Error(error.message);
 };
 
-// --- REPORTS (stub — no longer Google Sheets based) ---
+// --- REPORTS ---
 
-export const generateReport = async (_userId: string, _startDate: string, _endDate: string): Promise<string> => {
-    throw new Error('Report generation not yet implemented for Supabase backend.');
+export const generateReport = async (userId: string, startDate: string, endDate: string, orgId?: string): Promise<string> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Not authenticated');
+
+    const params = new URLSearchParams({ userId, startDate, endDate });
+    if (orgId) params.set('orgId', orgId);
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-report?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+    });
+
+    if (!res.ok) throw new Error('Report generation failed');
+    return await res.text(); // CSV string
 };

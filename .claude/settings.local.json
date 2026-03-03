@@ -10,7 +10,8 @@
       "Bash(find \"C:/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)\" -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.json\" -o -name \"*.html\" -o -name \"*.css\" -o -name \"*.js\" \\\\\\) ! -path \"*/node_modules/*\" ! -path \"*/.next/*\" ! -path \"*/.git/*\")",
       "Bash(ls -la \"/c/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)/components/\")",
       "Bash(ls -la \"/c/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)/services/\")",
-      "Bash(cat \"/c/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)/index.html\")"
+      "Bash(cat \"/c/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)/index.html\")",
+      "Bash(git fetch origin)"
     ]
   }
 }

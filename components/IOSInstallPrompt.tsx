@@ -36,7 +36,7 @@ export const IOSInstallPrompt: React.FC = () => {
              </svg>
           </div>
           <div>
-            <h3 className="font-bold text-lg">Install TruTasks</h3>
+            <h3 className="font-bold text-lg">Install TaskPoint</h3>
             <p className="text-slate-300 text-sm mt-1 mb-3 leading-relaxed">
               Install this app on your iPhone for offline access and better performance.
             </p>

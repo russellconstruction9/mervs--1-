@@ -2,15 +2,16 @@
 import React, { useState } from 'react';
 import { apiLogin } from '../services/sheetService';
 import { UserProfile } from '../types';
-import { CheckCircle, AlertTriangle, User, Lock } from './Icons';
+import { CheckCircle, AlertTriangle, User, Lock, Building } from './Icons';
 
 interface Props {
   onLogin: (user: UserProfile) => void;
   onAdminAccess?: () => void;
+  onRegisterOrg?: () => void;
 }
 
-const LoginView: React.FC<Props> = ({ onLogin, onAdminAccess }) => {
-  const [loginData, setLoginData] = useState({ name: '', pin: '' });
+const LoginView: React.FC<Props> = ({ onLogin, onAdminAccess, onRegisterOrg }) => {
+  const [loginData, setLoginData] = useState({ name: '', pin: '', orgSlug: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -18,8 +19,15 @@ const LoginView: React.FC<Props> = ({ onLogin, onAdminAccess }) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    // Sanitize PIN: digits only, max 4
+    const cleanPin = loginData.pin.replace(/\D/g, '').slice(0, 4);
+    if (cleanPin.length < 4) {
+      setError('PIN must be 4 digits.');
+      setIsLoading(false);
+      return;
+    }
     try {
-      const user = await apiLogin(loginData.name, loginData.pin);
+      const user = await apiLogin(loginData.name, cleanPin, loginData.orgSlug || undefined);
       onLogin(user);
     } catch (err: any) {
       setError(err.message || 'Invalid name or PIN. Please try again.');
@@ -95,6 +103,22 @@ const LoginView: React.FC<Props> = ({ onLogin, onAdminAccess }) => {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Company Code</label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Building size={18} /></div>
+                <input
+                  type="text"
+                  value={loginData.orgSlug}
+                  onChange={e => setLoginData({ ...loginData, orgSlug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900 font-mono"
+                  placeholder="your-company-code"
+                  autoComplete="organization"
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1 ml-1">Ask your manager for your company code</p>
+            </div>
+
+            <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Full Name</label>
               <div className="relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><User size={18} /></div>
@@ -119,7 +143,7 @@ const LoginView: React.FC<Props> = ({ onLogin, onAdminAccess }) => {
                   inputMode="numeric"
                   required
                   value={loginData.pin}
-                  onChange={e => setLoginData({ ...loginData, pin: e.target.value })}
+                  onChange={e => setLoginData({ ...loginData, pin: e.target.value.replace(/\D/g, '').slice(0, 4) })}
                   className="w-full pl-10 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-center tracking-[0.6em] text-2xl text-slate-900"
                   placeholder="••••"
                   maxLength={4}
@@ -152,15 +176,26 @@ const LoginView: React.FC<Props> = ({ onLogin, onAdminAccess }) => {
         </div>
       </div>
 
-      {onAdminAccess && (
-        <button
-          type="button"
-          onClick={onAdminAccess}
-          className="mt-6 text-slate-500 text-xs hover:text-slate-300 transition-colors relative z-10 underline underline-offset-2"
-        >
-          Admin Login
-        </button>
-      )}
+      <div className="mt-6 flex flex-col items-center gap-2 relative z-10">
+        {onAdminAccess && (
+          <button
+            type="button"
+            onClick={onAdminAccess}
+            className="text-slate-500 text-xs hover:text-slate-300 transition-colors underline underline-offset-2"
+          >
+            Admin Login
+          </button>
+        )}
+        {onRegisterOrg && (
+          <button
+            type="button"
+            onClick={onRegisterOrg}
+            className="text-orange-600 text-xs hover:text-orange-400 transition-colors underline underline-offset-2"
+          >
+            Register your company →
+          </button>
+        )}
+      </div>
 
       <p className="mt-4 text-slate-600 text-xs relative z-10">© 2026 TaskPoint Field Manager</p>
     </div>

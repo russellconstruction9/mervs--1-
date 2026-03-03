@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { fetchTasks, saveTask, deleteTask, fetchTimeEntries, saveTimeEntry, fetchMessages, sendMessage, syncPendingTimeEntries, fetchUsers, fetchJobs, apiLogout, getSessionUser } from './services/sheetService';
 import { supabase } from './services/supabaseClient';
 import { Task, TaskStatus, TimeEntry, ViewType, ChatMessage, UserProfile, JobOption } from './types';
@@ -7,6 +7,7 @@ import TaskModal from './components/TaskModal';
 import DayModal from './components/DayModal';
 import LoginView from './components/LoginView';
 import AdminLoginView from './components/AdminLoginView';
+import RegisterOrgView from './components/RegisterOrgView';
 import ChatView from './components/ChatView';
 import TimeClockView from './components/TimeClockView';
 import AdminView from './components/AdminView';
@@ -46,6 +47,11 @@ const App: React.FC = () => {
     const [currentAdmin, setCurrentAdmin] = useState<string | null>(null);
     // Whether to show admin login screen over the employee login
     const [showAdminLogin, setShowAdminLogin] = useState(false);
+    // Whether to show org registration screen
+    const [showRegisterOrg, setShowRegisterOrg] = useState(false);
+
+    // Realtime channel ref (cleaned up on logout)
+    const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
     // Modal State
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -109,16 +115,18 @@ const App: React.FC = () => {
         setShowAdminLogin(false);
     };
 
-    const loadData = useCallback(async (isBackground = false) => {
+    const loadData = useCallback(async (isBackground = false, orgId?: string) => {
         if (!isBackground) setIsLoading(true);
+
+        const resolvedOrgId = orgId ?? currentUser?.orgId;
 
         try {
             // Fetch core data (Tasks, TimeEntries, Users, Jobs)
             const [taskData, timeData, userData, jobData] = await Promise.all([
-                fetchTasks(),
-                fetchTimeEntries(),
-                fetchUsers(),
-                fetchJobs()
+                fetchTasks(resolvedOrgId),
+                fetchTimeEntries(resolvedOrgId),
+                fetchUsers(resolvedOrgId),
+                fetchJobs(resolvedOrgId)
             ]);
 
             // Sort Tasks: Pending/In Progress first
@@ -136,7 +144,7 @@ const App: React.FC = () => {
 
             // Fetch Messages if in chat view (to keep it fresh)
             if (currentView === 'chat') {
-                const msgs = await fetchMessages();
+                const msgs = await fetchMessages(resolvedOrgId);
                 setMessages(prev => hasDataChanged(prev, msgs) ? msgs : prev);
             }
 
@@ -151,24 +159,40 @@ const App: React.FC = () => {
     useEffect(() => {
         if (!currentUser) return;
 
-        loadData(false);
-        // Polling interval
-        const intervalId = setInterval(() => {
-            if (document.visibilityState === 'visible') {
-                if (currentView === 'chat') {
-                    // Fast poll for chat
-                    fetchMessages().then(msgs => {
-                        setMessages(prev => hasDataChanged(prev, msgs) ? msgs : prev);
-                    }).catch(console.warn);
-                } else {
-                    // Slow poll for other data
-                    loadData(true);
-                }
-            }
-        }, currentView === 'chat' ? 4000 : 30000); // 4s for chat, 30s for rest
+        const orgId = currentUser.orgId;
+        loadData(false, orgId);
 
+        // --- Supabase Realtime: replace polling with push-based updates ---
+        // Clean up any existing channel first
+        if (realtimeChannelRef.current) {
+            supabase.removeChannel(realtimeChannelRef.current);
+        }
+
+        if (orgId) {
+            const channel = supabase.channel(`org-${orgId}`)
+                .on('postgres_changes', {
+                    event: '*', schema: 'public', table: 'tasks',
+                    filter: `org_id=eq.${orgId}`
+                }, () => { fetchTasks(orgId).then(d => setTasks(prev => hasDataChanged(prev, d) ? d : prev)); })
+                .on('postgres_changes', {
+                    event: '*', schema: 'public', table: 'messages',
+                    filter: `org_id=eq.${orgId}`
+                }, () => { fetchMessages(orgId).then(d => setMessages(prev => hasDataChanged(prev, d) ? d : prev)); })
+                .on('postgres_changes', {
+                    event: '*', schema: 'public', table: 'time_entries',
+                    filter: `org_id=eq.${orgId}`
+                }, () => { fetchTimeEntries(orgId).then(d => setTimeEntries(prev => hasDataChanged(prev, d) ? d : prev)); })
+                .on('postgres_changes', {
+                    event: '*', schema: 'public', table: 'jobs',
+                    filter: `org_id=eq.${orgId}`
+                }, () => { fetchJobs(orgId).then(d => setJobs(prev => hasDataChanged(prev, d) ? d : prev)); })
+                .subscribe();
+            realtimeChannelRef.current = channel;
+        }
+
+        // Fallback: reload on tab focus (handles reconnection after background)
         const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') loadData(true);
+            if (document.visibilityState === 'visible') loadData(true, orgId);
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -183,15 +207,18 @@ const App: React.FC = () => {
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
         return () => {
-            clearInterval(intervalId);
+            if (realtimeChannelRef.current) {
+                supabase.removeChannel(realtimeChannelRef.current);
+                realtimeChannelRef.current = null;
+            }
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
         };
-    }, [loadData, currentView, currentUser]);
+    }, [loadData, currentUser]);
 
     const handleEnableNotifications = async () => {
         if (!currentUser) return;
-        const success = await subscribeUserToPush(currentUser.name);
+        const success = await subscribeUserToPush(currentUser.id, currentUser.orgId);
         if (success) {
             setNotificationsEnabled(true);
             alert("Success! You will now receive alerts for chat messages and new tasks.");
@@ -230,7 +257,7 @@ const App: React.FC = () => {
         else setTasks(prev => prev.map(t => t.id === task.id ? task : t));
         setIsTaskModalOpen(false);
         try {
-            await saveTask(task, isNew);
+            await saveTask(task, isNew, currentUser?.orgId);
         } catch (error) {
             alert("Synced task locally, but failed to sync to server. Will retry next time.");
         }
@@ -309,7 +336,7 @@ const App: React.FC = () => {
             }
             return newArr.sort((a, b) => b.startTime - a.startTime);
         });
-        syncPendingTimeEntries().catch(console.error);
+        syncPendingTimeEntries(currentUser?.orgId).catch(console.error);
     };
 
     // --- Day View Handlers ---
@@ -344,6 +371,14 @@ const App: React.FC = () => {
 
     // --- RENDER LOGIN IF NOT AUTHENTICATED ---
     if (!currentUser) {
+        if (showRegisterOrg) {
+            return (
+                <RegisterOrgView
+                    onBack={() => setShowRegisterOrg(false)}
+                    onRegistered={(_slug) => setShowRegisterOrg(false)}
+                />
+            );
+        }
         if (showAdminLogin) {
             return (
                 <AdminLoginView
@@ -352,7 +387,13 @@ const App: React.FC = () => {
                 />
             );
         }
-        return <LoginView onLogin={setCurrentUser} onAdminAccess={() => setShowAdminLogin(true)} />;
+        return (
+            <LoginView
+                onLogin={setCurrentUser}
+                onAdminAccess={() => setShowAdminLogin(true)}
+                onRegisterOrg={() => setShowRegisterOrg(true)}
+            />
+        );
     }
 
     return (
@@ -364,18 +405,24 @@ const App: React.FC = () => {
                 <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-2 select-none">
                         <div className="flex flex-col items-center">
-                            <svg viewBox="0 0 260 88" className="h-12 w-auto">
+                            <svg viewBox="0 0 300 88" className="h-12 w-auto">
+                                {/* Checkmark */}
                                 <path d="M10 28 L20 38 L40 8" fill="none" stroke="#ea580c" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
-                                <text x="50" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#ea580c">Tru</text>
-                                <text x="110" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#0f172a">C</text>
-                                <text x="136" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#0f172a">h</text>
-                                <path d="M136 12 L146 2 L156 12" fill="none" stroke="#0f172a" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-                                <text x="160" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#0f172a">o</text>
-                                <rect x="187" y="20" width="6" height="20" fill="#0f172a" />
-                                <rect x="187" y="10" width="6" height="6" fill="#ea580c" />
-                                <text x="198" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#0f172a">ce</text>
-                                <text x="110" y="62" fontFamily="Inter, sans-serif" fontWeight="700" fontSize="11" style={{ letterSpacing: '0.1em' }} fill="#0f172a">ROOFING</text>
-                                <text x="110" y="78" fontFamily="Inter, sans-serif" fontWeight="700" fontSize="11" style={{ letterSpacing: '0.08em' }} fill="#ea580c">PRODUCTION</text>
+                                {/* Task — orange */}
+                                <text x="50" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#ea580c">Task</text>
+                                {/* P — dark */}
+                                <text x="148" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#0f172a">P</text>
+                                {/* o — dark with roof chevron above */}
+                                <text x="171" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#0f172a">o</text>
+                                <path d="M171 12 L182 2 L193 12" fill="none" stroke="#0f172a" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                                {/* i — dark with orange dot */}
+                                <rect x="197" y="20" width="6" height="20" fill="#0f172a" />
+                                <rect x="197" y="10" width="6" height="6" fill="#ea580c" />
+                                {/* nt — dark */}
+                                <text x="207" y="40" fontFamily="Inter, sans-serif" fontWeight="900" fontSize="34" fill="#0f172a">nt</text>
+                                {/* Subtitle */}
+                                <text x="148" y="62" fontFamily="Inter, sans-serif" fontWeight="700" fontSize="11" style={{ letterSpacing: '0.1em' }} fill="#0f172a">FIELD TASK</text>
+                                <text x="148" y="78" fontFamily="Inter, sans-serif" fontWeight="700" fontSize="11" style={{ letterSpacing: '0.08em' }} fill="#ea580c">MANAGER</text>
                             </svg>
                         </div>
                     </div>

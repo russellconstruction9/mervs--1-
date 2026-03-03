@@ -15,6 +15,11 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       }
-    }
+    },
+
+    // Inject build timestamp for service worker cache busting
+    define: {
+      __APP_VERSION__: JSON.stringify(Date.now().toString()),
+    },
   };
 });

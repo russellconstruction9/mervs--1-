@@ -1,89 +1,92 @@
 
-import { GOOGLE_SCRIPT_URL } from '../constants';
-import { PushSubscriptionData } from '../types';
+import { supabase } from './supabaseClient';
 
-// IMPORTANT: This key MUST be from Firebase Console -> Project Settings -> Cloud Messaging -> Web Push Certificates
-// If you don't generate this, push notifications will NOT work on iOS/Safari.
-// For testing/placeholder, we use a dummy string, but the user MUST update this.
-const VAPID_PUBLIC_KEY = "YOUR_VAPID_PUBLIC_KEY_HERE_FROM_FIREBASE";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string;
 
-// Helper to convert VAPID key
-function urlBase64ToUint8Array(base64String: string) {
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding)
-    .replace(/\-/g, '+')
-    .replace(/_/g, '/');
-
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
-
-  for (let i = 0; i < rawData.length; ++i) {
+  for (let i = 0; i < rawData.length; i++) {
     outputArray[i] = rawData.charCodeAt(i);
   }
   return outputArray;
 }
 
-export const subscribeUserToPush = async (userId: string): Promise<boolean> => {
+export const subscribeUserToPush = async (userId: string, orgId?: string): Promise<boolean> => {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    console.log("Push messaging not supported");
+    console.log('Push messaging not supported');
     return false;
   }
 
-  // 1. Check if VAPID key is configured
-  if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY.includes("YOUR_VAPID")) {
-    alert("System Admin: VAPID Key missing in code. Notifications cannot be enabled.");
+  if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY.includes('YOUR_VAPID')) {
+    alert('Push notifications are not yet configured. Contact your system admin.');
     return false;
   }
 
   try {
-    // 2. Request Permission (Must be triggered by user click on iOS)
+    // Must be triggered by user gesture (required for iOS 16.4+)
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
-      alert("Permission denied. You must enable notifications in system settings.");
+      alert('Permission denied. Enable notifications in your device settings.');
       return false;
     }
 
-    // 3. Get Registration
     const registration = await navigator.serviceWorker.ready;
 
-    // 4. Subscribe
-    const subscribeOptions = {
+    const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-    };
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
 
-    const subscription = await registration.pushManager.subscribe(subscribeOptions);
-    
-    // 5. Prepare data for backend
-    const subJSON = JSON.parse(JSON.stringify(subscription));
-    
-    const pushData: PushSubscriptionData = {
+    const subJSON = subscription.toJSON();
+
+    // Send subscription to Supabase Edge Function for storage
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return false;
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/push-subscribe`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
         endpoint: subJSON.endpoint,
-        keys: {
-            p256dh: subJSON.keys.p256dh,
-            auth: subJSON.keys.auth
-        },
-        userId: userId,
-        userAgent: navigator.userAgent
-    };
+        p256dh: subJSON.keys?.p256dh,
+        auth: subJSON.keys?.auth,
+        userId,
+        orgId,
+        userAgent: navigator.userAgent,
+      }),
+    });
 
-    // 6. Send to Apps Script
-    if (GOOGLE_SCRIPT_URL) {
-        await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({
-                action: 'saveSubscription',
-                data: pushData
-            })
-        });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error('Failed to save push subscription:', err);
+      return false;
     }
-    
-    return true;
 
+    return true;
   } catch (e) {
-    console.error("Failed to subscribe to push", e);
-    alert("Failed to enable notifications. See console.");
+    console.error('Failed to subscribe to push:', e);
     return false;
   }
+};
+
+// Trigger a push notification to the org (called from App.tsx on task/message events)
+export const sendPushToOrg = async (orgId: string, title: string, body: string, url?: string, targetUserIds?: string[]): Promise<void> => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) return;
+
+  await fetch(`${SUPABASE_URL}/functions/v1/push-send`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ orgId, title, body, url, targetUserIds }),
+  }).catch(console.error);
 };

@@ -60,6 +60,7 @@ export interface UserProfile {
   rate: string;
   role: 'admin' | 'user';
   pin?: string;
+  orgId?: string;  // organization the user belongs to (multi-tenant)
 }
 
 export interface JobOption {
