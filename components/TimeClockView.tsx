@@ -6,8 +6,10 @@ import { saveTimeEntryLocal, syncPendingTimeEntries, generateReport } from '../s
 
 interface Props {
     timeEntries: TimeEntry[];
+    userId: string;
     userName: string;
     hourlyRate: string;
+    orgId?: string;
     availableJobs: JobOption[];
     onRefresh: () => void;
     onOptimisticUpdate: (entry: TimeEntry) => void;
@@ -39,7 +41,7 @@ const ActiveTimer = React.memo(({ startTime }: { startTime: number }) => {
     );
 });
 
-const TimeClockView: React.FC<Props> = ({ timeEntries, userName, hourlyRate, availableJobs, onRefresh, onOptimisticUpdate }) => {
+const TimeClockView: React.FC<Props> = ({ timeEntries, userId, userName, hourlyRate, orgId, availableJobs, onRefresh, onOptimisticUpdate }) => {
     const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [selectedJob, setSelectedJob] = useState('General Shop');
@@ -142,7 +144,11 @@ const TimeClockView: React.FC<Props> = ({ timeEntries, userName, hourlyRate, ava
         }
 
         setIsGeneratingReport(true);
-        setReportUrl(null);
+        // Revoke previous blob URL if any
+        if (reportUrl) {
+            URL.revokeObjectURL(reportUrl);
+            setReportUrl(null);
+        }
 
         // Determine Dates
         const now = new Date();
@@ -164,17 +170,37 @@ const TimeClockView: React.FC<Props> = ({ timeEntries, userName, hourlyRate, ava
         }
 
         try {
-            const url = await generateReport(
-                userName,
+            const csvText = await generateReport(
+                userId,
                 start.toISOString(),
-                end.toISOString()
+                end.toISOString(),
+                orgId
             );
-            setReportUrl(url);
+
+            // Convert CSV text to a downloadable blob URL
+            const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+            const blobUrl = URL.createObjectURL(blob);
+
+            // Auto-trigger download
+            const anchor = document.createElement('a');
+            anchor.href = blobUrl;
+            anchor.download = `pay-report-${userName}-${start.toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+
+            setReportUrl(blobUrl);
         } catch (e) {
             alert("Failed to generate report. Please try again.");
         } finally {
             setIsGeneratingReport(false);
         }
+    };
+
+    const handleCloseReportModal = () => {
+        if (reportUrl) URL.revokeObjectURL(reportUrl);
+        setShowReportModal(false);
+        setReportUrl(null);
     };
 
     const formatHours = (ms: number) => {
@@ -425,7 +451,7 @@ const TimeClockView: React.FC<Props> = ({ timeEntries, userName, hourlyRate, ava
                     <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl p-6">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="font-bold text-lg text-slate-900">Generate Pay Report</h3>
-                            <button onClick={() => { setShowReportModal(false); setReportUrl(null); }} className="text-slate-400 hover:text-slate-600">
+                            <button onClick={handleCloseReportModal} className="text-slate-400 hover:text-slate-600">
                                 <X size={24} />
                             </button>
                         </div>
@@ -464,7 +490,7 @@ const TimeClockView: React.FC<Props> = ({ timeEntries, userName, hourlyRate, ava
                                     {isGeneratingReport ? (
                                         <>
                                             <RotateCcw size={18} className="animate-spin" />
-                                            Generating PDF...
+                                            Generating Report...
                                         </>
                                     ) : (
                                         <>
@@ -479,17 +505,16 @@ const TimeClockView: React.FC<Props> = ({ timeEntries, userName, hourlyRate, ava
                                 <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
                                     <CheckCircle size={32} />
                                 </div>
-                                <h4 className="font-bold text-slate-900 mb-2">Report Ready!</h4>
-                                <p className="text-sm text-slate-500 mb-6">Your pay summary has been generated and saved to Drive.</p>
+                                <h4 className="font-bold text-slate-900 mb-2">Report Downloaded!</h4>
+                                <p className="text-sm text-slate-500 mb-6">Your CSV pay report has been downloaded to your device.</p>
 
                                 <a
-                                    href={reportUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
+                                    href={reportUrl ?? '#'}
+                                    download={`pay-report-${userName}.csv`}
                                     className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition shadow-lg shadow-orange-600/20"
                                 >
                                     <Download size={18} />
-                                    View & Download PDF
+                                    Download CSV Again
                                 </a>
                             </div>
                         )}

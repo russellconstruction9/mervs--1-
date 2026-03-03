@@ -12,6 +12,8 @@ interface Props {
     tasks: Task[];
     messages: ChatMessage[];
     currentUserName: string;
+    orgId?: string;
+    orgSlug?: string;
     onRefresh: () => void;
     onClose: () => void;
     onLogout: () => void;
@@ -30,7 +32,7 @@ const LiveTimer = ({ startTime }: { startTime: number }) => {
     return <span className="font-mono">{hours}h {minutes}m {seconds}s</span>;
 };
 
-const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTasks, messages, currentUserName, onRefresh, onClose, onLogout }) => {
+const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTasks, messages, currentUserName, orgId, orgSlug, onRefresh, onClose, onLogout }) => {
     const [activeTab, setActiveTab] = useState<'live' | 'users' | 'jobs' | 'tasks' | 'chat'>('live');
 
     // Local state for Optimistic Updates
@@ -67,7 +69,7 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
         };
         setLocalUsers(prev => [...prev, user]);
         setNewUser({ name: '', rate: '', pin: '' });
-        saveUser(user, true).then(() => onRefresh());
+        saveUser(user, true, orgId, orgSlug).then(() => onRefresh());
     };
 
     const handleDeleteUser = (id: string) => {
@@ -88,7 +90,7 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
         };
         setLocalJobs(prev => [...prev, job]);
         setNewJob({ name: '', address: '' });
-        saveJob(job, true).then(() => onRefresh());
+        saveJob(job, true, orgId).then(() => onRefresh());
     };
 
     const handleDeleteJob = (id: string) => {
@@ -118,7 +120,7 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
 
         setLocalTasks(prev => [task, ...prev]);
         setNewTask({ title: '', assignedTo: '', dueDate: '', jobName: '' });
-        saveTask(task, true).then(() => onRefresh());
+        saveTask(task, true, orgId).then(() => onRefresh());
     };
 
     const handleDeleteTask = (id: string) => {

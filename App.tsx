@@ -50,6 +50,9 @@ const App: React.FC = () => {
     // Whether to show org registration screen
     const [showRegisterOrg, setShowRegisterOrg] = useState(false);
 
+    // Org slug for employee creation (derived from orgId on login)
+    const [orgSlug, setOrgSlug] = useState<string | undefined>(undefined);
+
     // Realtime channel ref (cleaned up on logout)
     const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -106,6 +109,7 @@ const App: React.FC = () => {
         setCurrentUser(null);
         setCurrentAdmin(null);
         setShowAdminLogin(false);
+        setOrgSlug(undefined);
     };
 
     const handleAdminLogout = async () => {
@@ -113,6 +117,7 @@ const App: React.FC = () => {
         setCurrentAdmin(null);
         setCurrentUser(null);
         setShowAdminLogin(false);
+        setOrgSlug(undefined);
     };
 
     const loadData = useCallback(async (isBackground = false, orgId?: string) => {
@@ -161,6 +166,12 @@ const App: React.FC = () => {
 
         const orgId = currentUser.orgId;
         loadData(false, orgId);
+
+        // Fetch org slug for use in employee creation
+        if (orgId && !orgSlug) {
+            supabase.from('organizations').select('slug').eq('id', orgId).single()
+                .then(({ data }) => { if (data?.slug) setOrgSlug(data.slug); });
+        }
 
         // --- Supabase Realtime: replace polling with push-based updates ---
         // Clean up any existing channel first
@@ -556,8 +567,10 @@ const App: React.FC = () => {
                 {currentView === 'timeclock' && (
                     <TimeClockView
                         timeEntries={timeEntries}
+                        userId={currentUser.id}
                         userName={currentUser.name}
                         hourlyRate={currentUser.rate}
+                        orgId={currentUser.orgId}
                         availableJobs={jobs}
                         onRefresh={() => loadData(true)}
                         onOptimisticUpdate={handleTimeEntryOptimisticUpdate}
@@ -635,6 +648,8 @@ const App: React.FC = () => {
                         tasks={tasks}
                         messages={messages}
                         currentUserName={currentUser.name}
+                        orgId={currentUser?.orgId}
+                        orgSlug={orgSlug}
                         onRefresh={() => loadData(true)}
                         onClose={() => setCurrentView('tasks')}
                         onLogout={handleAdminLogout}
