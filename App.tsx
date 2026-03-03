@@ -75,18 +75,33 @@ const App: React.FC = () => {
         });
 
         // Listen for auth state changes (login / logout / registration auto-signin)
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            // These events fire when the Edge Function creates/updates OTHER users via the
+            // service role. They must NOT replace the admin's session.
+            if (event === 'USER_UPDATED' || event === 'USER_DELETED') return;
+
             if (!session) {
                 setCurrentUser(null);
                 return;
             }
-            const user = await getSessionUser();
-            if (user) {
-                setCurrentUser(user);
-                // Close any pre-auth overlays (registration, admin login)
-                setShowRegisterOrg(false);
-                setShowAdminLogin(false);
-            }
+
+            // Only update the user state if this session belongs to a DIFFERENT user
+            // (i.e., a fresh login) or if we have no user yet.
+            setCurrentUser(prev => {
+                if (prev && prev.id === session.user.id) {
+                    // Same user — don't replace state. Let explicit login handlers do it.
+                    return prev;
+                }
+                // Different user or null — fetch and update
+                getSessionUser().then(user => {
+                    if (user) {
+                        setCurrentUser(user);
+                        setShowRegisterOrg(false);
+                        setShowAdminLogin(false);
+                    }
+                });
+                return prev; // Return prev optimistically; the .then() will update properly
+            });
         });
 
         return () => subscription.unsubscribe();
@@ -100,6 +115,11 @@ const App: React.FC = () => {
 
     // Single logout handler for both admin and employee
     const handleLogout = async () => {
+        // Explicitly tear down realtime channel before clearing state
+        if (realtimeChannelRef.current) {
+            supabase.removeChannel(realtimeChannelRef.current);
+            realtimeChannelRef.current = null;
+        }
         await apiLogout();
         setCurrentUser(null);
         setShowAdminLogin(false);
@@ -143,7 +163,7 @@ const App: React.FC = () => {
         } finally {
             if (!isBackground) setIsLoading(false);
         }
-    }, [currentView]);
+    }, [currentView, currentUser]);
 
     useEffect(() => {
         if (!currentUser) return;
@@ -390,6 +410,7 @@ const App: React.FC = () => {
                     tasks={tasks}
                     messages={messages}
                     currentUserName={currentUser.name}
+                    currentUserId={currentUser.id}
                     orgId={currentUser.orgId}
                     orgSlug={orgSlug}
                     onRefresh={() => loadData(true)}
@@ -601,6 +622,7 @@ const App: React.FC = () => {
                     <ChatView
                         messages={messages}
                         currentUserName={currentUser.name}
+                        orgId={currentUser.orgId}
                     />
                 )}
 

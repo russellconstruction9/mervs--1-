@@ -3,6 +3,9 @@ import { supabase } from './supabaseClient';
 import { Task, TaskPriority, TaskStatus, TimeEntry, ChatMessage, UserProfile, JobOption } from '../types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+if (!SUPABASE_URL) {
+    throw new Error('[sheetService] VITE_SUPABASE_URL is not set. Add it to your .env file.');
+}
 
 // --- IMAGE UTILS ---
 

@@ -7,6 +7,7 @@ import { sendMessage } from '../services/sheetService';
 interface Props {
     messages: ChatMessage[];
     currentUserName: string;
+    orgId?: string;
 }
 
 // Subcomponent: Individual Message Bubble
@@ -132,7 +133,7 @@ const MessageList = React.memo(({ messages, currentUserName, handleSend }: any) 
 });
 
 
-const ChatView: React.FC<Props> = ({ messages: serverMessages, currentUserName }) => {
+const ChatView: React.FC<Props> = ({ messages: serverMessages, currentUserName, orgId }) => {
     const [inputValue, setInputValue] = useState('');
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
@@ -179,7 +180,7 @@ const ChatView: React.FC<Props> = ({ messages: serverMessages, currentUserName }
         }
 
         try {
-            await sendMessage(messageToSend);
+            await sendMessage(messageToSend, orgId);
 
             // Success: Mark as sent locally
             setLocalMessages(prev => prev.map(m =>

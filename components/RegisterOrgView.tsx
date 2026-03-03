@@ -45,10 +45,9 @@ const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
 
         setIsLoading(true);
         try {
-            // 1. Create the organization record
-            const org = await createOrganization(companyName, slug);
-
-            // 2. Sign up the admin user — DB trigger will auto-create the profile row
+            // 1. Sign up the admin user first — no DB writes yet.
+            //    The auth.users insert triggers handle_new_user, but org_id will be
+            //    set in the next step, so we pass it via metadata.
             const { data, error: signupError } = await supabase.auth.signUp({
                 email: adminEmail.trim(),
                 password: adminPassword,
@@ -57,14 +56,19 @@ const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
                         name: adminEmail.trim().split('@')[0],
                         rate: 0,
                         role: 'admin',
-                        org_id: org.id,
+                        // org_id set after org creation below
                     },
                 },
             });
 
             if (signupError || !data.user) throw new Error(signupError?.message || 'Registration failed');
 
-            // 3. Safety-update the profile in case the trigger ran before org_id was set
+            // 2. Create the organization row — user already exists in auth
+            const org = await createOrganization(companyName, slug);
+
+            // 3. Update the profile row to stamp org_id and confirm role=admin.
+            //    The trigger may have already created the profile without org_id;
+            //    this upsert guarantees it is set.
             await supabase
                 .from('profiles')
                 .update({ role: 'admin', org_id: org.id })

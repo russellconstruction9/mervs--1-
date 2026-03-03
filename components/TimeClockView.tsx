@@ -61,7 +61,9 @@ const TimeClockView: React.FC<Props> = ({ timeEntries, userId, userName, hourlyR
 
     // Initialize active entry
     useEffect(() => {
-        const active = userEntries.find(t => t.status === 'active');
+        const active = timeEntries
+            .filter(t => t.userId === userName)
+            .find(t => t.status === 'active');
         setActiveEntry(active || null);
         if (active && active.jobName) {
             setSelectedJob(active.jobName);
@@ -114,7 +116,7 @@ const TimeClockView: React.FC<Props> = ({ timeEntries, userId, userName, hourlyR
             onOptimisticUpdate(updatedEntry);
 
             // Force aggressive sync so Admin sees this immediately
-            syncPendingTimeEntries().catch(e => console.error("Background sync failed", e));
+            syncPendingTimeEntries(orgId).catch(e => console.error("Background sync failed", e));
 
         } catch (e) {
             alert("Error saving locally. Please check storage.");
@@ -210,7 +212,8 @@ const TimeClockView: React.FC<Props> = ({ timeEntries, userId, userName, hourlyR
     // Earnings Calculation (Weekly)
     const getWeeklyStats = () => {
         const now = new Date();
-        const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay())); // Sunday
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
         startOfWeek.setHours(0, 0, 0, 0);
 
         const weeklyEntries = userEntries.filter(e => e.startTime >= startOfWeek.getTime());
@@ -327,8 +330,8 @@ const TimeClockView: React.FC<Props> = ({ timeEntries, userId, userName, hourlyR
                     <button
                         onClick={handleToggleClock}
                         className={`w-40 h-40 rounded-full flex items-center justify-center border-8 transition-all active:scale-95 ${activeEntry
-                                ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100 hover:border-red-300'
-                                : 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300'
+                            ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100 hover:border-red-300'
+                            : 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300'
                             }`}
                         style={{
                             boxShadow: activeEntry

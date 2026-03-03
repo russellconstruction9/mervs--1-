@@ -12,6 +12,7 @@ interface Props {
     tasks: Task[];
     messages: ChatMessage[];
     currentUserName: string;
+    currentUserId: string;
     orgId?: string;
     orgSlug?: string;
     onRefresh: () => void;
@@ -32,7 +33,7 @@ const LiveTimer = ({ startTime }: { startTime: number }) => {
     return <span className="font-mono">{hours}h {minutes}m {seconds}s</span>;
 };
 
-const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTasks, messages, currentUserName, orgId, orgSlug, onRefresh, onClose, onLogout }) => {
+const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTasks, messages, currentUserName, currentUserId, orgId, orgSlug, onRefresh, onClose, onLogout }) => {
     const [activeTab, setActiveTab] = useState<'live' | 'users' | 'jobs' | 'tasks' | 'chat'>('live');
 
     // Local state for Optimistic Updates
@@ -69,13 +70,27 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
         };
         setLocalUsers(prev => [...prev, user]);
         setNewUser({ name: '', rate: '', pin: '' });
-        saveUser(user, true, orgId, orgSlug).then(() => onRefresh());
+        saveUser(user, true, orgId, orgSlug)
+            .then(() => onRefresh())
+            .catch(err => {
+                alert(`Failed to create employee: ${err.message}`);
+                setLocalUsers(prev => prev.filter(u => u.id !== user.id));
+            });
     };
 
     const handleDeleteUser = (id: string) => {
+        if (id === currentUserId) {
+            alert('You cannot delete your own account.');
+            return;
+        }
         if (window.confirm("Delete this team member? This cannot be undone.")) {
             setLocalUsers(prev => prev.filter(u => u.id !== id));
-            deleteUser(id).then(() => onRefresh());
+            deleteUser(id)
+                .then(() => onRefresh())
+                .catch(err => {
+                    alert(`Failed to delete employee: ${err.message}`);
+                    onRefresh(); // re-sync to restore the user
+                });
         }
     };
 
@@ -90,13 +105,23 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
         };
         setLocalJobs(prev => [...prev, job]);
         setNewJob({ name: '', address: '' });
-        saveJob(job, true, orgId).then(() => onRefresh());
+        saveJob(job, true, orgId)
+            .then(() => onRefresh())
+            .catch(err => {
+                alert(`Failed to save job: ${err.message}`);
+                setLocalJobs(prev => prev.filter(j => j.id !== job.id));
+            });
     };
 
     const handleDeleteJob = (id: string) => {
         if (window.confirm("Delete this job?")) {
             setLocalJobs(prev => prev.filter(j => j.id !== id));
-            deleteJob(id).then(() => onRefresh());
+            deleteJob(id)
+                .then(() => onRefresh())
+                .catch(err => {
+                    alert(`Failed to delete job: ${err.message}`);
+                    onRefresh();
+                });
         }
     };
 
@@ -120,13 +145,23 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
 
         setLocalTasks(prev => [task, ...prev]);
         setNewTask({ title: '', assignedTo: '', dueDate: '', jobName: '' });
-        saveTask(task, true, orgId).then(() => onRefresh());
+        saveTask(task, true, orgId)
+            .then(() => onRefresh())
+            .catch(err => {
+                alert(`Failed to save task: ${err.message}`);
+                setLocalTasks(prev => prev.filter(t => t.id !== task.id));
+            });
     };
 
     const handleDeleteTask = (id: string) => {
         if (window.confirm("Delete this task?")) {
             setLocalTasks(prev => prev.filter(t => t.id !== id));
-            deleteTask(id).then(() => onRefresh());
+            deleteTask(id)
+                .then(() => onRefresh())
+                .catch(err => {
+                    alert(`Failed to delete task: ${err.message}`);
+                    onRefresh();
+                });
         }
     };
 
