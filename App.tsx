@@ -62,17 +62,26 @@ const App: React.FC = () => {
 
     // Check for persistent login
     useEffect(() => {
+        let hasUser = false;
         const storedUser = localStorage.getItem('truchoice_user');
         if (storedUser) {
             try {
                 setCurrentUser(JSON.parse(storedUser));
+                hasUser = true;
             } catch (e) {
                 console.error("Failed to parse stored user", e);
             }
         }
         const storedAdmin = localStorage.getItem('truchoice_admin');
         if (storedAdmin) {
-            setCurrentAdmin(storedAdmin);
+            if (hasUser) {
+                setCurrentAdmin(storedAdmin);
+            } else {
+                const adminProfile: UserProfile = { id: 'admin_user', name: storedAdmin, rate: '0', role: 'admin' };
+                setCurrentUser(adminProfile);
+                localStorage.setItem('truchoice_user', JSON.stringify(adminProfile));
+                setCurrentAdmin(storedAdmin);
+            }
         }
     }, []);
 
@@ -86,11 +95,15 @@ const App: React.FC = () => {
             setCurrentUser(adminProfile);
             localStorage.setItem('truchoice_user', JSON.stringify(adminProfile));
         }
+        // Navigate to admin dashboard after login
+        setCurrentView('admin');
     };
 
     const handleUserLogout = () => {
         localStorage.removeItem('truchoice_user');
+        localStorage.removeItem('truchoice_admin');
         setCurrentUser(null);
+        setCurrentAdmin(null);
         setShowAdminLogin(false);
     };
 
@@ -204,6 +217,7 @@ const App: React.FC = () => {
     };
 
     const checkDueTasks = (currentTasks: Task[]) => {
+        if (!('Notification' in window)) return;
         if (Notification.permission !== 'granted') return;
         const today = new Date().toISOString().split('T')[0];
         const dueToday = currentTasks.filter(t => t.dueDate === today && t.status !== TaskStatus.COMPLETED);
@@ -338,7 +352,7 @@ const App: React.FC = () => {
     });
 
     // --- RENDER LOGIN IF NOT AUTHENTICATED ---
-    if (!currentUser && !currentAdmin) {
+    if (!currentUser) {
         if (showAdminLogin) {
             return (
                 <AdminLoginView
@@ -355,7 +369,7 @@ const App: React.FC = () => {
             <IOSInstallPrompt />
 
             {/* Header */}
-            <header className="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 shadow-md safe-top" style={{ boxShadow: '0 1px 12px rgba(15,23,42,0.08), 0 0.5px 0 rgba(234,88,12,0.15)"' }}>
+            <header className="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 shadow-md safe-top" style={{ boxShadow: '0 1px 12px rgba(15,23,42,0.08), 0 0.5px 0 rgba(234,88,12,0.15)' }}>
                 <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-2 select-none">
                         <div className="flex flex-col items-center">
@@ -540,8 +554,8 @@ const App: React.FC = () => {
                             { view: 'timeclock' as const, Icon: Clock, label: 'Time' },
                             { view: 'chat' as const, Icon: MessageCircle, label: 'Chat' },
                             { view: 'calendar' as const, Icon: Calendar, label: 'Calendar' },
-                            { view: 'admin' as const, Icon: ShieldCheck, label: 'Admin' },
-                        ]
+                            ...(currentAdmin ? [{ view: 'admin' as const, Icon: ShieldCheck, label: 'Admin' }] : []),
+                        ] as { view: ViewType; Icon: React.FC<any>; label: string }[]
                     ).map(({ view, Icon, label }) => {
                         const isActive = currentView === view;
                         return (
@@ -566,7 +580,7 @@ const App: React.FC = () => {
 
             <TaskModal
                 isOpen={isTaskModalOpen}
-                onClose={() => setIsTaskModalOpen(false)}
+                onClose={() => { setIsTaskModalOpen(false); setNewItemDate(undefined); }}
                 onSave={handleSaveTask}
                 task={editingTask}
                 initialDate={newItemDate}
@@ -588,7 +602,12 @@ const App: React.FC = () => {
                         onLogout={handleAdminLogout}
                     />
                 ) : (
-                    <AdminLoginView onLogin={handleAdminLogin} />
+                    <div className="fixed inset-0 z-50">
+                        <AdminLoginView
+                            onLogin={handleAdminLogin}
+                            onBack={() => setCurrentView('tasks')}
+                        />
+                    </div>
                 )
             )}
 

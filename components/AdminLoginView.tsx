@@ -148,25 +148,7 @@ const AdminLoginView: React.FC<Props> = ({ onLogin, onBack }) => {
                 {/* Color strip — brand orange */}
                 <div className="h-1.5 w-full" style={{ background: 'linear-gradient(90deg, #ea580c, #f97316)' }} />
 
-                {/* Tab toggle — only show if not first-time forced setup */}
-                {!isFirstTime && (
-                    <div className="flex border-b border-slate-100">
-                        <button
-                            type="button"
-                            onClick={() => { setMode('login'); setError(''); }}
-                            className={`flex-1 py-3.5 text-sm font-bold uppercase tracking-wider transition-colors ${mode === 'login' ? 'text-orange-600 bg-gradient-to-b from-orange-50 to-white' : 'text-slate-400 hover:text-slate-600 bg-white'}`}
-                        >
-                            Login
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => { setMode('setup'); setError(''); }}
-                            className={`flex-1 py-3.5 text-sm font-bold uppercase tracking-wider transition-colors ${mode === 'setup' ? 'text-orange-600 bg-gradient-to-b from-orange-50 to-white' : 'text-slate-400 hover:text-slate-600 bg-white'}`}
-                        >
-                            Setup
-                        </button>
-                    </div>
-                )}
+                {/* No tab toggle — Setup is only shown on first-time (isFirstTime), Login is default thereafter */}
 
                 <div className="p-6 space-y-4">
                     {onBack && (
