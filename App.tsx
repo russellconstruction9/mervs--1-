@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { fetchTasks, saveTask, deleteTask, fetchTimeEntries, saveTimeEntry, fetchMessages, sendMessage, syncPendingTimeEntries, fetchUsers, fetchJobs } from './services/sheetService';
+import { fetchTasks, saveTask, deleteTask, fetchTimeEntries, saveTimeEntry, fetchMessages, sendMessage, syncPendingTimeEntries, fetchUsers, fetchJobs, apiLogout, getSessionUser } from './services/sheetService';
+import { supabase } from './services/supabaseClient';
 import { Task, TaskStatus, TimeEntry, ViewType, ChatMessage, UserProfile, JobOption } from './types';
 import TaskModal from './components/TaskModal';
 import DayModal from './components/DayModal';
@@ -60,62 +61,52 @@ const App: React.FC = () => {
     // Desktop Install State
     const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
-    // Check for persistent login
+    // Check for persistent Supabase session
     useEffect(() => {
-        let hasUser = false;
-        const storedUser = localStorage.getItem('truchoice_user');
-        if (storedUser) {
-            try {
-                setCurrentUser(JSON.parse(storedUser));
-                hasUser = true;
-            } catch (e) {
-                console.error("Failed to parse stored user", e);
+        // Restore session from Supabase on mount
+        getSessionUser().then(user => {
+            if (user) {
+                setCurrentUser(user);
+                if (user.role === 'admin') setCurrentAdmin(user.name);
             }
-        }
-        const storedAdmin = localStorage.getItem('truchoice_admin');
-        if (storedAdmin) {
-            if (hasUser) {
-                setCurrentAdmin(storedAdmin);
-            } else {
-                const adminProfile: UserProfile = { id: 'admin_user', name: storedAdmin, rate: '0', role: 'admin' };
-                setCurrentUser(adminProfile);
-                localStorage.setItem('truchoice_user', JSON.stringify(adminProfile));
-                setCurrentAdmin(storedAdmin);
+        });
+
+        // Listen for auth state changes (login / logout)
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            if (!session) {
+                setCurrentUser(null);
+                setCurrentAdmin(null);
+                return;
             }
-        }
+            const user = await getSessionUser();
+            if (user) {
+                setCurrentUser(user);
+                if (user.role === 'admin') setCurrentAdmin(user.name);
+            }
+        });
+
+        return () => subscription.unsubscribe();
     }, []);
 
     const handleAdminLogin = (username: string) => {
-        localStorage.setItem('truchoice_admin', username);
         setCurrentAdmin(username);
         setShowAdminLogin(false);
-        // Create a synthetic admin user profile so the main app renders properly
-        if (!currentUser) {
-            const adminProfile: UserProfile = { id: 'admin_user', name: username, rate: '0', role: 'admin' };
-            setCurrentUser(adminProfile);
-            localStorage.setItem('truchoice_user', JSON.stringify(adminProfile));
-        }
-        // Navigate to admin dashboard after login
+        // currentUser is already set by onAuthStateChange
         setCurrentView('admin');
     };
 
-    const handleUserLogout = () => {
-        localStorage.removeItem('truchoice_user');
-        localStorage.removeItem('truchoice_admin');
+    const handleUserLogout = async () => {
+        await apiLogout();
         setCurrentUser(null);
         setCurrentAdmin(null);
         setShowAdminLogin(false);
     };
 
-    const handleAdminLogout = () => {
-        localStorage.removeItem('truchoice_admin');
+    const handleAdminLogout = async () => {
+        await apiLogout();
         setCurrentAdmin(null);
+        setCurrentUser(null);
         setShowAdminLogin(false);
-        // If the current user was the synthetic admin profile, log them out too
-        if (currentUser?.id === 'admin_user') {
-            localStorage.removeItem('truchoice_user');
-            setCurrentUser(null);
-        }
     };
 
     const loadData = useCallback(async (isBackground = false) => {
@@ -414,8 +405,8 @@ const App: React.FC = () => {
                             {currentUser.name.charAt(0)}
                         </div>
 
-                        {/* Logout — only for non-admin employees */}
-                        {currentUser.id !== 'admin_user' && (
+                        {/* Logout */}
+                        {(
                             <button
                                 onClick={handleUserLogout}
                                 className="p-2 text-slate-400 hover:text-red-500 transition-colors"

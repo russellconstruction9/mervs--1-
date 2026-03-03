@@ -20,7 +20,6 @@ const LoginView: React.FC<Props> = ({ onLogin, onAdminAccess }) => {
     setError('');
     try {
       const user = await apiLogin(loginData.name, loginData.pin);
-      localStorage.setItem('truchoice_user', JSON.stringify(user));
       onLogin(user);
     } catch (err: any) {
       setError(err.message || 'Invalid name or PIN. Please try again.');

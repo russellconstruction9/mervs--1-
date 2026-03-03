@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ls \"C:\\\\Users\\\\russe\\\\OneDrive\\\\Desktop\\\\robert\\\\mervs \\(1\\)\")"
+      "Bash(ls \"C:\\\\Users\\\\russe\\\\OneDrive\\\\Desktop\\\\robert\\\\mervs \\(1\\)\")",
+      "Bash(git push origin main)",
+      "Bash(find \"/c/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)\" -type f -name \"*.json\" -o -name \"*.tsx\" -o -name \"*.ts\")",
+      "Bash(find \"/c/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)\" -type f -name \"*.ts\" -o -name \"*.tsx\" -o -name \".env*\" -o -name \"*.json\")",
+      "Bash(find \"C:\\\\Users\\\\russe\\\\OneDrive\\\\Desktop\\\\robert\\\\mervs \\(1\\)\" -type f -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.json\" -o -name \"*.html\" -o -name \"*.css\" -o -name \"*.js\")",
+      "Bash(find \"/c/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)\" -maxdepth 1 -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.json\" \\\\\\))",
+      "Bash(find \"C:/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)\" -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.json\" -o -name \"*.html\" -o -name \"*.css\" -o -name \"*.js\" \\\\\\) ! -path \"*/node_modules/*\" ! -path \"*/.next/*\" ! -path \"*/.git/*\")",
+      "Bash(ls -la \"/c/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)/components/\")",
+      "Bash(ls -la \"/c/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)/services/\")",
+      "Bash(cat \"/c/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)/index.html\")"
     ]
   }
 }

@@ -1,14 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
-import { ShieldCheck, AlertTriangle, User, Lock, Building } from './Icons';
-
-const ADMIN_CREDS_KEY = 'truchoice_admin_creds';
-
-interface AdminCreds {
-    username: string;
-    password: string;
-    companyName: string;
-}
+import React, { useState } from 'react';
+import { ShieldCheck, AlertTriangle, User, Lock } from './Icons';
+import { apiAdminLogin } from '../services/sheetService';
 
 interface Props {
     onLogin: (username: string) => void;
@@ -16,86 +9,25 @@ interface Props {
 }
 
 const AdminLoginView: React.FC<Props> = ({ onLogin, onBack }) => {
-    const [mode, setMode] = useState<'login' | 'setup'>('login');
-    const [isFirstTime, setIsFirstTime] = useState(false);
-
-    // Form state
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [companyName, setCompanyName] = useState('');
-
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-
-    useEffect(() => {
-        const stored = localStorage.getItem(ADMIN_CREDS_KEY);
-        if (!stored) {
-            setIsFirstTime(true);
-            setMode('setup');
-        }
-    }, []);
-
-    const handleSetup = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-
-        if (!companyName.trim()) {
-            setError('Please enter your company name.');
-            return;
-        }
-        if (!username.trim()) {
-            setError('Please enter an admin username.');
-            return;
-        }
-        if (password.length < 6) {
-            setError('Password must be at least 6 characters.');
-            return;
-        }
-        if (password !== confirmPassword) {
-            setError('Passwords do not match.');
-            return;
-        }
-
-        setIsLoading(true);
-        await new Promise(r => setTimeout(r, 600));
-
-        const creds: AdminCreds = {
-            username: username.trim(),
-            password,
-            companyName: companyName.trim(),
-        };
-        localStorage.setItem(ADMIN_CREDS_KEY, JSON.stringify(creds));
-        localStorage.setItem('truchoice_admin', username.trim());
-        onLogin(username.trim());
-        setIsLoading(false);
-    };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setIsLoading(true);
-        await new Promise(r => setTimeout(r, 600));
 
-        const stored = localStorage.getItem(ADMIN_CREDS_KEY);
-        if (stored) {
-            const creds: AdminCreds = JSON.parse(stored);
-            if (
-                username.trim().toLowerCase() === creds.username.toLowerCase() &&
-                password === creds.password
-            ) {
-                localStorage.setItem('truchoice_admin', username.trim());
-                onLogin(username.trim());
-            } else {
-                setError('Invalid username or password.');
-            }
-        } else {
-            setError('No admin account found. Please set up first.');
+        try {
+            const user = await apiAdminLogin(email.trim(), password);
+            onLogin(user.name);
+        } catch (err: any) {
+            setError(err.message || 'Invalid credentials.');
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     };
-
-    const isSetupMode = mode === 'setup';
 
     return (
         <div
@@ -111,7 +43,7 @@ const AdminLoginView: React.FC<Props> = ({ onLogin, onBack }) => {
                     backgroundSize: '40px 40px',
                 }}
             />
-            {/* Ambient glow — brand orange */}
+            {/* Ambient glow */}
             <div
                 className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full opacity-15 blur-3xl pointer-events-none"
                 style={{ background: 'radial-gradient(circle, #ea580c 0%, transparent 70%)' }}
@@ -134,9 +66,7 @@ const AdminLoginView: React.FC<Props> = ({ onLogin, onBack }) => {
                 </svg>
                 <div className="flex items-center gap-2 bg-orange-600/20 border border-orange-500/30 px-4 py-1.5 rounded-full">
                     <ShieldCheck size={14} className="text-orange-400" />
-                    <span className="text-orange-300 text-xs font-bold uppercase tracking-widest">
-                        {isSetupMode ? 'Company Setup' : 'Admin Portal'}
-                    </span>
+                    <span className="text-orange-300 text-xs font-bold uppercase tracking-widest">Admin Portal</span>
                 </div>
             </div>
 
@@ -145,10 +75,7 @@ const AdminLoginView: React.FC<Props> = ({ onLogin, onBack }) => {
                 className="relative z-10 bg-white/95 backdrop-blur-xl w-full max-w-sm rounded-2xl overflow-hidden"
                 style={{ boxShadow: '0 25px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1)' }}
             >
-                {/* Color strip — brand orange */}
                 <div className="h-1.5 w-full" style={{ background: 'linear-gradient(90deg, #ea580c, #f97316)' }} />
-
-                {/* No tab toggle — Setup is only shown on first-time (isFirstTime), Login is default thereafter */}
 
                 <div className="p-6 space-y-4">
                     {onBack && (
@@ -160,180 +87,72 @@ const AdminLoginView: React.FC<Props> = ({ onLogin, onBack }) => {
                             ← Back to Employee Login
                         </button>
                     )}
-                    {isSetupMode ? (
-                        // ─── COMPANY SETUP ───
-                        <>
-                            <div className="text-center mb-1">
-                                <h2 className="text-xl font-black text-slate-900">Create Company Account</h2>
-                                <p className="text-slate-500 text-xs mt-1">
-                                    Set up your admin account. You'll use this to manage your team.
-                                </p>
-                            </div>
 
-                            {error && (
-                                <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-medium flex items-center gap-2 border border-red-100">
-                                    <AlertTriangle size={16} /> {error}
-                                </div>
-                            )}
+                    <div className="text-center mb-1">
+                        <h2 className="text-xl font-black text-slate-900">Administrator Login</h2>
+                        <p className="text-slate-500 text-xs mt-1">Restricted access — authorized personnel only</p>
+                    </div>
 
-                            <form onSubmit={handleSetup} className="space-y-3">
-                                {/* Company Name */}
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Company Name</label>
-                                    <div className="relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Building size={18} /></div>
-                                        <input
-                                            type="text"
-                                            required
-                                            value={companyName}
-                                            onChange={e => setCompanyName(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900"
-                                            placeholder="TruChoice Roofing"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Username */}
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Admin Username</label>
-                                    <div className="relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><User size={18} /></div>
-                                        <input
-                                            type="text"
-                                            required
-                                            value={username}
-                                            onChange={e => setUsername(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900"
-                                            placeholder="owner"
-                                            autoComplete="username"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Password */}
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Password</label>
-                                    <div className="relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Lock size={18} /></div>
-                                        <input
-                                            type="password"
-                                            required
-                                            value={password}
-                                            onChange={e => setPassword(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900"
-                                            placeholder="Min 6 characters"
-                                            autoComplete="new-password"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Confirm Password */}
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Confirm Password</label>
-                                    <div className="relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Lock size={18} /></div>
-                                        <input
-                                            type="password"
-                                            required
-                                            value={confirmPassword}
-                                            onChange={e => setConfirmPassword(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900"
-                                            placeholder="••••••••"
-                                            autoComplete="new-password"
-                                        />
-                                    </div>
-                                </div>
-
-                                <button
-                                    type="submit"
-                                    disabled={isLoading}
-                                    className="w-full py-4 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-2 disabled:opacity-70 active:scale-[0.98]"
-                                    style={{ background: isLoading ? '#1e293b' : 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #ea580c 200%)' }}
-                                    onMouseEnter={e => { if (!isLoading) (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, #ea580c, #c2410c)'; }}
-                                    onMouseLeave={e => { if (!isLoading) (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #ea580c 200%)'; }}
-                                >
-                                    {isLoading ? (
-                                        <span className="flex items-center gap-2">
-                                            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                            </svg>
-                                            Creating Account...
-                                        </span>
-                                    ) : (
-                                        <><Building size={20} /> Create Company Account</>
-                                    )}
-                                </button>
-                            </form>
-                        </>
-                    ) : (
-                        // ─── ADMIN LOGIN ───
-                        <>
-                            <div className="text-center mb-1">
-                                <h2 className="text-xl font-black text-slate-900">Administrator Login</h2>
-                                <p className="text-slate-500 text-xs mt-1">Restricted access — authorized personnel only</p>
-                            </div>
-
-                            {error && (
-                                <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-medium flex items-center gap-2 border border-red-100">
-                                    <AlertTriangle size={16} /> {error}
-                                </div>
-                            )}
-
-                            <form onSubmit={handleLogin} className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Username</label>
-                                    <div className="relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><User size={18} /></div>
-                                        <input
-                                            type="text"
-                                            required
-                                            value={username}
-                                            onChange={e => setUsername(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900"
-                                            placeholder="Enter username"
-                                            autoComplete="username"
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Password</label>
-                                    <div className="relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Lock size={18} /></div>
-                                        <input
-                                            type="password"
-                                            required
-                                            value={password}
-                                            onChange={e => setPassword(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900"
-                                            placeholder="••••••••"
-                                            autoComplete="current-password"
-                                        />
-                                    </div>
-                                </div>
-                                <button
-                                    type="submit"
-                                    disabled={isLoading}
-                                    className="w-full py-4 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-2 disabled:opacity-70 active:scale-[0.98]"
-                                    style={{ background: isLoading ? '#1e293b' : 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #ea580c 200%)' }}
-                                    onMouseEnter={e => { if (!isLoading) (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, #ea580c, #c2410c)'; }}
-                                    onMouseLeave={e => { if (!isLoading) (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #ea580c 200%)'; }}
-                                >
-                                    {isLoading ? (
-                                        <span className="flex items-center gap-2">
-                                            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                            </svg>
-                                            Verifying...
-                                        </span>
-                                    ) : (
-                                        <><ShieldCheck size={20} /> Access Admin Dashboard</>
-                                    )}
-                                </button>
-                            </form>
-                        </>
+                    {error && (
+                        <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-medium flex items-center gap-2 border border-red-100">
+                            <AlertTriangle size={16} /> {error}
+                        </div>
                     )}
+
+                    <form onSubmit={handleLogin} className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Email</label>
+                            <div className="relative">
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><User size={18} /></div>
+                                <input
+                                    type="email"
+                                    required
+                                    value={email}
+                                    onChange={e => setEmail(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900"
+                                    placeholder="admin@yourdomain.com"
+                                    autoComplete="email"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Password</label>
+                            <div className="relative">
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Lock size={18} /></div>
+                                <input
+                                    type="password"
+                                    required
+                                    value={password}
+                                    onChange={e => setPassword(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-bold text-slate-900"
+                                    placeholder="••••••••"
+                                    autoComplete="current-password"
+                                />
+                            </div>
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={isLoading}
+                            className="w-full py-4 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-2 disabled:opacity-70 active:scale-[0.98]"
+                            style={{ background: isLoading ? '#1e293b' : 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #ea580c 200%)' }}
+                            onMouseEnter={e => { if (!isLoading) (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, #ea580c, #c2410c)'; }}
+                            onMouseLeave={e => { if (!isLoading) (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #ea580c 200%)'; }}
+                        >
+                            {isLoading ? (
+                                <span className="flex items-center gap-2">
+                                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                    Verifying...
+                                </span>
+                            ) : (
+                                <><ShieldCheck size={20} /> Access Admin Dashboard</>
+                            )}
+                        </button>
+                    </form>
                 </div>
             </div>
 

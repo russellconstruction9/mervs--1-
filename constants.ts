@@ -1,6 +1,5 @@
-// Replace this URL with your deployed Web App URL from Google Apps Script
-// Example: "https://script.google.com/macros/s/AKfycbx.../exec"
-export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx50yTwqN8TCpRLYAltBuOmD1bSdGBjpO2pLRBF0dSac4n4g06Qv2s4Ht5MarDxyiC95w/exec";
+// Supabase credentials are configured via .env.local (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)
+
 
 export const THEME_COLORS = {
   primary: "orange-600", // Tru Orange
