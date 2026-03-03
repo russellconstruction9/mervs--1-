@@ -1,0 +1,17 @@
+filename: cloudbuild.yaml
+createTime: '2026-03-03T13:30:06.744335143Z'
+description: Build and deploy to Cloud Run service mervs--1--git on push to "^main$"
+github:
+  name: mervs--1-
+  owner: russellconstruction9
+  push:
+    branch: ^main$
+id: 20b7e62f-061e-4486-b751-0697c16d1e20
+includeBuildLogs: INCLUDE_BUILD_LOGS_WITH_STATUS
+name: rmgpgab-mervs--1--git-us-east5-russellconstruction9-mervs--1lrq
+resourceName: projects/rfe-lite/locations/global/triggers/20b7e62f-061e-4486-b751-0697c16d1e20
+serviceAccount: projects/rfe-lite/serviceAccounts/737894618293-compute@developer.gserviceaccount.com
+tags:
+- gcp-cloud-build-deploy-cloud-run
+- gcp-cloud-build-deploy-cloud-run-managed
+- mervs--1--git
