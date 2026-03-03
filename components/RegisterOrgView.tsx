@@ -45,10 +45,7 @@ const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
 
         setIsLoading(true);
         try {
-            // 1. Create the organization record
-            const org = await createOrganization(companyName, slug);
-
-            // 2. Sign up the admin user with org_id in metadata
+            // 1. Sign up the admin user FIRST (without org_id - we'll add it after creating the org)
             const { data, error: signupError } = await supabase.auth.signUp({
                 email: adminEmail.trim(),
                 password: adminPassword,
@@ -57,14 +54,16 @@ const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
                         name: adminEmail.split('@')[0],
                         rate: 0,
                         role: 'admin',
-                        org_id: org.id,
                     },
                 },
             });
 
             if (signupError || !data.user) throw new Error(signupError?.message || 'Registration failed');
 
-            // 3. Update profile role to admin (trigger sets it from metadata, this is a safety update)
+            // 2. Create the organization record (now authenticated)
+            const org = await createOrganization(companyName, slug);
+
+            // 3. Update profile with org_id and ensure role is admin
             await supabase
                 .from('profiles')
                 .update({ role: 'admin', org_id: org.id })
