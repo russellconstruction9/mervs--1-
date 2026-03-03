@@ -20,6 +20,7 @@ import sharp from 'sharp';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
+const PUBLIC = resolve(ROOT, 'public');
 const SVG_PATH = resolve(ROOT, 'icon.svg');
 
 const svgBuffer = readFileSync(SVG_PATH);

@@ -41,13 +41,13 @@ export const compressImage = (base64Str: string): Promise<string> => {
 
 // --- AUTH ---
 
-export const apiLogin = async (name: string, pin: string, orgSlug?: string): Promise<UserProfile> => {
+export const apiLogin = async (name: string, password: string, orgSlug?: string): Promise<UserProfile> => {
     // Derive email from the name using the internal pattern
     const domain = orgSlug ? `${orgSlug}.taskpoint.local` : 'taskpoint.local';
     const email = `${name.trim().toLowerCase().replace(/\s+/g, '.')}@${domain}`;
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pin });
-    if (error || !data.user) throw new Error('Invalid name or PIN. Please try again.');
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error || !data.user) throw new Error('Invalid name or password. Please try again.');
 
     const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -66,13 +66,13 @@ export const apiLogin = async (name: string, pin: string, orgSlug?: string): Pro
     };
 };
 
-export const apiSignup = async (name: string, pin: string, rate: string, orgId?: string, orgSlug?: string): Promise<UserProfile> => {
+export const apiSignup = async (name: string, password: string, rate: string, orgId?: string, orgSlug?: string): Promise<UserProfile> => {
     const domain = orgSlug ? `${orgSlug}.taskpoint.local` : 'taskpoint.local';
     const email = `${name.trim().toLowerCase().replace(/\s+/g, '.')}@${domain}`;
 
     const { data, error } = await supabase.auth.signUp({
         email,
-        password: pin,
+        password,
         options: {
             data: { name: name.trim(), rate: parseFloat(rate) || 0, role: 'user', org_id: orgId ?? null }
         }
@@ -404,7 +404,7 @@ export const fetchUsers = async (orgId?: string): Promise<UserProfile[]> => {
 
 export const saveUser = async (user: UserProfile, isNew: boolean, orgId?: string, orgSlug?: string): Promise<UserProfile> => {
     if (isNew) {
-        const result = await apiSignup(user.name, user.pin ?? '0000', user.rate ?? '0', orgId, orgSlug);
+        const result = await apiSignup(user.name, user.password ?? 'changeme123', user.rate ?? '0', orgId, orgSlug);
         if (user.role === 'admin') {
             await supabase.from('profiles').update({ role: 'admin' }).eq('id', result.id);
         }

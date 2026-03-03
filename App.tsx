@@ -6,7 +6,6 @@ import { Task, TaskStatus, TimeEntry, ViewType, ChatMessage, UserProfile, JobOpt
 import TaskModal from './components/TaskModal';
 import DayModal from './components/DayModal';
 import LoginView from './components/LoginView';
-import AdminLoginView from './components/AdminLoginView';
 import RegisterOrgView from './components/RegisterOrgView';
 import ChatView from './components/ChatView';
 import TimeClockView from './components/TimeClockView';
@@ -43,12 +42,10 @@ const App: React.FC = () => {
 
     // User Authentication State
     const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-    // Admin Authentication State (separate from regular user auth)
-    const [currentAdmin, setCurrentAdmin] = useState<string | null>(null);
-    // Whether to show admin login screen over the employee login
-    const [showAdminLogin, setShowAdminLogin] = useState(false);
     // Whether to show org registration screen
     const [showRegisterOrg, setShowRegisterOrg] = useState(false);
+    // Derived: is current user an admin?
+    const isAdmin = currentUser?.role === 'admin';
 
     // Org slug for employee creation (derived from orgId on login)
     const [orgSlug, setOrgSlug] = useState<string | undefined>(undefined);
@@ -74,50 +71,27 @@ const App: React.FC = () => {
     useEffect(() => {
         // Restore session from Supabase on mount
         getSessionUser().then(user => {
-            if (user) {
-                setCurrentUser(user);
-                if (user.role === 'admin') setCurrentAdmin(user.name);
-            }
+            if (user) setCurrentUser(user);
         });
 
         // Listen for auth state changes (login / logout)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             if (!session) {
                 setCurrentUser(null);
-                setCurrentAdmin(null);
                 return;
             }
             const user = await getSessionUser();
-            if (user) {
-                setCurrentUser(user);
-                if (user.role === 'admin') setCurrentAdmin(user.name);
-            }
+            if (user) setCurrentUser(user);
         });
 
         return () => subscription.unsubscribe();
     }, []);
 
-    const handleAdminLogin = (username: string) => {
-        setCurrentAdmin(username);
-        setShowAdminLogin(false);
-        // currentUser is already set by onAuthStateChange
-        setCurrentView('admin');
-    };
-
-    const handleUserLogout = async () => {
+    const handleLogout = async () => {
         await apiLogout();
         setCurrentUser(null);
-        setCurrentAdmin(null);
-        setShowAdminLogin(false);
         setOrgSlug(undefined);
-    };
-
-    const handleAdminLogout = async () => {
-        await apiLogout();
-        setCurrentAdmin(null);
-        setCurrentUser(null);
-        setShowAdminLogin(false);
-        setOrgSlug(undefined);
+        setCurrentView('tasks');
     };
 
     const loadData = useCallback(async (isBackground = false, orgId?: string) => {
@@ -390,18 +364,9 @@ const App: React.FC = () => {
                 />
             );
         }
-        if (showAdminLogin) {
-            return (
-                <AdminLoginView
-                    onLogin={handleAdminLogin}
-                    onBack={() => setShowAdminLogin(false)}
-                />
-            );
-        }
         return (
             <LoginView
                 onLogin={setCurrentUser}
-                onAdminAccess={() => setShowAdminLogin(true)}
                 onRegisterOrg={() => setShowRegisterOrg(true)}
             />
         );
@@ -466,7 +431,7 @@ const App: React.FC = () => {
                         {/* Logout */}
                         {(
                             <button
-                                onClick={handleUserLogout}
+                                onClick={handleLogout}
                                 className="p-2 text-slate-400 hover:text-red-500 transition-colors"
                                 title="Log Out"
                             >
@@ -605,7 +570,7 @@ const App: React.FC = () => {
                             { view: 'timeclock' as const, Icon: Clock, label: 'Time' },
                             { view: 'chat' as const, Icon: MessageCircle, label: 'Chat' },
                             { view: 'calendar' as const, Icon: Calendar, label: 'Calendar' },
-                            ...(currentAdmin ? [{ view: 'admin' as const, Icon: ShieldCheck, label: 'Admin' }] : []),
+                            ...(isAdmin ? [{ view: 'admin' as const, Icon: ShieldCheck, label: 'Admin' }] : []),
                         ] as { view: ViewType; Icon: React.FC<any>; label: string }[]
                     ).map(({ view, Icon, label }) => {
                         const isActive = currentView === view;
@@ -638,30 +603,21 @@ const App: React.FC = () => {
                 availableJobs={jobs}
             />
 
-            {/* Admin View — either login or dashboard, shown as full-page overlay */}
-            {currentView === 'admin' && (
-                currentAdmin ? (
-                    <AdminView
-                        users={users}
-                        jobs={jobs}
-                        timeEntries={timeEntries}
-                        tasks={tasks}
-                        messages={messages}
-                        currentUserName={currentUser.name}
-                        orgId={currentUser?.orgId}
-                        orgSlug={orgSlug}
-                        onRefresh={() => loadData(true)}
-                        onClose={() => setCurrentView('tasks')}
-                        onLogout={handleAdminLogout}
-                    />
-                ) : (
-                    <div className="fixed inset-0 z-50">
-                        <AdminLoginView
-                            onLogin={handleAdminLogin}
-                            onBack={() => setCurrentView('tasks')}
-                        />
-                    </div>
-                )
+            {/* Admin View — shown as full-page overlay for admin users */}
+            {currentView === 'admin' && isAdmin && (
+                <AdminView
+                    users={users}
+                    jobs={jobs}
+                    timeEntries={timeEntries}
+                    tasks={tasks}
+                    messages={messages}
+                    currentUserName={currentUser.name}
+                    orgId={currentUser?.orgId}
+                    orgSlug={orgSlug}
+                    onRefresh={() => loadData(true)}
+                    onClose={() => setCurrentView('tasks')}
+                    onLogout={handleLogout}
+                />
             )}
 
             {isDayModalOpen && (

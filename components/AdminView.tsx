@@ -45,7 +45,7 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
     useEffect(() => { setLocalTasks(globalTasks); }, [globalTasks]);
 
     // Forms
-    const [newUser, setNewUser] = useState({ name: '', rate: '', pin: '' });
+    const [newUser, setNewUser] = useState({ name: '', rate: '', password: '' });
     const [newJob, setNewJob] = useState({ name: '', address: '' });
     const [newTask, setNewTask] = useState({ title: '', assignedTo: '', dueDate: '', jobName: '' });
 
@@ -56,8 +56,8 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
     const handleAddUser = (e: React.FormEvent) => {
         e.preventDefault();
         if (!newUser.name) return;
-        if (!newUser.pin || newUser.pin.length < 4) {
-            alert('Please enter a 4-digit PIN for this employee.');
+        if (!newUser.password || newUser.password.length < 6) {
+            alert('Please enter a password of at least 6 characters for this employee.');
             return;
         }
         const user: UserProfile = {
@@ -65,10 +65,10 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
             name: newUser.name,
             rate: newUser.rate || '0',
             role: 'user',
-            pin: newUser.pin || undefined
+            password: newUser.password
         };
         setLocalUsers(prev => [...prev, user]);
-        setNewUser({ name: '', rate: '', pin: '' });
+        setNewUser({ name: '', rate: '', password: '' });
         saveUser(user, true, orgId, orgSlug).then(() => onRefresh());
     };
 
@@ -351,9 +351,9 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
                                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1"><DollarSign size={10} /> Hourly Rate</label>
                                         <input type="number" step="0.01" placeholder="25.00" value={newUser.rate} onChange={e => setNewUser({ ...newUser, rate: e.target.value })} className="w-full mt-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" />
                                     </div>
-                                    <div className="w-32">
-                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1"><Lock size={10} /> Login PIN <span className="text-red-500">*</span></label>
-                                        <input type="text" inputMode="numeric" maxLength={4} placeholder="e.g. 1234" required value={newUser.pin} onChange={e => setNewUser({ ...newUser, pin: e.target.value.replace(/\D/g, '').slice(0, 4) })} className="w-full mt-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-center tracking-[0.3em] focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" />
+                                    <div className="w-40">
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1"><Lock size={10} /> Password <span className="text-red-500">*</span></label>
+                                        <input type="password" minLength={6} placeholder="Min 6 chars" required value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} className="w-full mt-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" />
                                         <p className="text-[10px] text-slate-400 mt-1">Employee uses this to log in</p>
                                     </div>
                                 </div>
@@ -391,9 +391,9 @@ const AdminView: React.FC<Props> = ({ users, jobs, timeEntries, tasks: globalTas
                                                             <span className="text-xs text-emerald-600 font-bold flex items-center gap-0.5">
                                                                 <DollarSign size={11} />{user.rate || '0'}/hr
                                                             </span>
-                                                            {user.pin && (
+                                                            {user.password && (
                                                                 <span className="text-xs text-slate-400 flex items-center gap-0.5">
-                                                                    <Lock size={10} /> PIN: ••••
+                                                                    <Lock size={10} /> Password set
                                                                 </span>
                                                             )}
                                                             {user.role === 'admin' && (

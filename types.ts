@@ -59,8 +59,8 @@ export interface UserProfile {
   name: string;
   rate: string;
   role: 'admin' | 'user';
-  pin?: string;
-  orgId?: string;  // organization the user belongs to (multi-tenant)
+  password?: string;  // Only used during employee creation, never stored
+  orgId?: string;     // organization the user belongs to (multi-tenant)
 }
 
 export interface JobOption {
