@@ -11,7 +11,8 @@
       "Bash(ls -la \"/c/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)/components/\")",
       "Bash(ls -la \"/c/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)/services/\")",
       "Bash(cat \"/c/Users/russe/OneDrive/Desktop/robert/mervs \\(1\\)/index.html\")",
-      "Bash(git fetch origin)"
+      "Bash(git fetch origin)",
+      "mcp__Claude_Preview__preview_start"
     ]
   }
 }
