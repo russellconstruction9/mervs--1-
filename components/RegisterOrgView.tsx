@@ -60,14 +60,21 @@ const RegisterOrgView: React.FC<Props> = ({ onBack, onRegistered }) => {
 
             if (signupError || !data.user) throw new Error(signupError?.message || 'Registration failed');
 
+            // Wait for session to be fully established
+            await new Promise(resolve => setTimeout(resolve, 500));
+
             // 2. Create the organization record (now authenticated)
             const org = await createOrganization(companyName, slug);
 
             // 3. Update profile with org_id and ensure role is admin
-            await supabase
+            const { error: updateError } = await supabase
                 .from('profiles')
                 .update({ role: 'admin', org_id: org.id })
                 .eq('id', data.user.id);
+
+            if (updateError) {
+                console.warn('Profile update warning:', updateError.message);
+            }
 
             setSuccess(`Organization created successfully!`);
             setTimeout(() => onRegistered(slug), 1500);

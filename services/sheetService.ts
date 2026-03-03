@@ -80,6 +80,9 @@ export const apiSignup = async (username: string, displayName: string, password:
 
     if (error || !data.user) throw new Error(error?.message || 'Signup failed');
 
+    // Wait for session to establish before profile update
+    await new Promise(resolve => setTimeout(resolve, 300));
+
     // Update profile with username
     await supabase.from('profiles').update({ username: username.trim().toLowerCase() }).eq('id', data.user.id);
 
